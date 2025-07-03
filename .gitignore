@@ -1,0 +1,209 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+.yarn/
+
+# Build outputs
+dist/
+dist-ssr/
+build/
+.solid/
+.output/
+.vercel/
+.netlify/
+
+# Development
+*.local
+.env
+.env.*
+!.env.example
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE and Editor files
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+*.sublime-project
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+playwright/.cache/
+test-results.xml
+junit.xml
+
+# Database files (local development)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+local-data/
+user-data/
+
+# Encryption keys and secrets
+*.key
+*.pem
+*.p12
+*.pfx
+secrets/
+private/
+
+# Backup files
+*.backup
+*.bak
+*.old
+*.orig
+backups/
+
+# Cache
+.cache/
+.parcel-cache/
+.turbo/
+.temp/
+.tmp/
+
+# Package manager files
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# PWA/Service Worker
+workbox-*.js
+sw.js
+service-worker.js
+precache-manifest.*
+
+# Build analysis
+stats.json
+report.html
+bundle-report/
+
+# TypeScript
+*.tsbuildinfo
+.tsc-out/
+
+# Vitest
+.vitest-cache/
+
+# SolidJS specific
+.solid-start/
+
+# User-specific files
+*.user
+*.userosscache
+*.suo
+
+# Documentation build outputs
+docs/_site/
+docs/.jekyll-cache/
+_site/
+
+# Temporary files
+*.tmp
+*.temp
+~$*
+
+# Archives
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# Media files (if not needed in repo)
+*.mp4
+*.avi
+*.mov
+*.wmv
+*.flv
+*.mkv
+
+# Large data files
+*.csv
+!sample-data.csv
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!manifest.json
+!.prettierrc.json
+!.eslintrc.json
+
+# Claude/AI specific
+.claude/
+!.claude.md
+CLAUDE.md.backup
+
+# Deployment
+.firebase/
+.firebaserc
+firebase-debug.log
+
+# Miscellaneous
+.grunt/
+.sass-cache/
+connect.lock
+libpeerconnection.log
+testem.log
+typings/
+
+# Debug
+debug/
+*.debug
+
+# Office temporary files
+~$*.doc*
+~$*.xls*
+~$*.ppt*
+*.~vsd*
+
+# Office document files (containing sensitive data)
+*.odt
+*.ods
+*.odp
+*.docx
+*.xlsx
+*.pptx
+
+# Keep important config examples
+!*.example
+!*.sample
