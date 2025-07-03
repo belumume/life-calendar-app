@@ -4,6 +4,7 @@ import { Title } from "@solidjs/meta";
 import { useApp } from "../../lib/context/AppContext";
 import { appService } from "../../lib/services/app-service";
 import JournalList from "../../components/JournalList";
+import SyncStatus from "../../components/SyncStatus";
 
 export default function JournalPage() {
   const navigate = useNavigate();
@@ -34,7 +35,7 @@ export default function JournalPage() {
       // Calculate streaks
       if (entries.length > 0) {
         // Sort entries by day number
-        const sortedEntries = [...entries].sort((a, b) => a.dayNumber - b.dayNumber);
+        const sortedEntries = [...entries].sort((a, b) => (a.dayNumber || 0) - (b.dayNumber || 0));
         
         // Calculate current streak
         let current = 0;
@@ -55,7 +56,7 @@ export default function JournalPage() {
         let longest = 0;
         let tempStreak = 1;
         for (let i = 1; i < sortedEntries.length; i++) {
-          if (sortedEntries[i].dayNumber - sortedEntries[i - 1].dayNumber === 1) {
+          if ((sortedEntries[i].dayNumber || 0) - (sortedEntries[i - 1].dayNumber || 0) === 1) {
             tempStreak++;
           } else {
             longest = Math.max(longest, tempStreak);
@@ -82,6 +83,7 @@ export default function JournalPage() {
           <h1>My Journal</h1>
         </div>
         <div class="header-actions">
+          <SyncStatus />
           <A href="/settings" class="icon-link" title="Settings">⚙️</A>
         </div>
       </header>

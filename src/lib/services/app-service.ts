@@ -1,8 +1,12 @@
 import { userRepository } from '../db/repositories/user-repository';
 import { journalRepository } from '../db/repositories/journal-repository';
+import { goalRepository } from '../db/repositories/goal-repository';
+import { habitRepository } from '../db/repositories/habit-repository';
 import { browserDB } from '../db/browser-db';
 import { encryptionService } from '../encryption/browser-crypto';
-import type { User, JournalEntry } from '../validation/schemas';
+import { syncQueue } from '../sync/sync-queue';
+import type { User, JournalEntry, Goal, GoalStatus, Habit } from '../validation/schemas';
+import type { GoalFormData } from '../validation/input-schemas';
 
 export class AppServiceError extends Error {
   constructor(message: string, public code?: string) {
@@ -25,6 +29,10 @@ export class AppService {
       
       // Check for existing user
       this.currentUser = await userRepository.getUser();
+      
+      // Load sync queue
+      await syncQueue.loadQueue();
+      
       this.isInitialized = true;
     } catch (error) {
       console.error('Failed to initialize app service:', error);
@@ -62,6 +70,12 @@ export class AppService {
       
       // Mark as authenticated after account creation
       this.authenticated = true;
+      
+      // Queue for sync
+      await syncQueue.addOperation('create', 'user', updatedUser.id, {
+        birthDate: updatedUser.birthDate,
+        // Don't sync sensitive data like passphrase or salt
+      });
       
       return updatedUser;
     } catch (error) {
@@ -125,7 +139,7 @@ export class AppService {
       // Encrypt content
       const encrypted = await encryptionService.encrypt(content);
       
-      return await journalRepository.createEntry({
+      const entry = await journalRepository.createEntry({
         userId: this.currentUser.id,
         periodId: period.id,
         date: new Date().toISOString(),
@@ -137,6 +151,21 @@ export class AppService {
         achievements: achievements || [],
         gratitude: gratitude || [],
       });
+      
+      // Queue for sync (encrypted data)
+      await syncQueue.addOperation('create', 'journal', entry.id, {
+        periodId: entry.periodId,
+        date: entry.date,
+        dayNumber: entry.dayNumber,
+        content: entry.content,
+        iv: entry.iv,
+        mood: entry.mood,
+        tags: entry.tags,
+        achievements: entry.achievements,
+        gratitude: entry.gratitude,
+      });
+      
+      return entry;
     } catch (error) {
       if (error instanceof AppServiceError) throw error;
       console.error('Failed to add journal entry:', error);
@@ -257,6 +286,259 @@ export class AppService {
     } catch (error) {
       console.error('Failed to get journal entries:', error);
       throw new AppServiceError('Failed to load journal entries', 'LOAD_ENTRIES_ERROR');
+    }
+  }
+
+  // Goal methods
+  async createGoal(formData: GoalFormData): Promise<Goal> {
+    if (!this.currentUser) {
+      throw new AppServiceError('No user logged in', 'NOT_AUTHENTICATED');
+    }
+
+    try {
+      const currentPeriod = await this.getCurrentPeriod();
+      
+      const goal = await goalRepository.createGoal({
+        userId: this.currentUser.id,
+        periodId: currentPeriod?.id,
+        title: formData.title,
+        description: formData.description,
+        category: formData.category,
+        priority: formData.priority,
+        status: 'active',
+        targetDate: formData.targetDate,
+        progress: 0,
+        milestones: formData.milestones?.map((m, index) => ({
+          id: crypto.randomUUID(),
+          title: m.title,
+          completed: false,
+        })),
+      });
+
+      // Queue for sync
+      await syncQueue.addOperation('create', 'goal', goal.id, {
+        ...goal,
+        userId: undefined, // Don't sync userId
+      });
+
+      return goal;
+    } catch (error) {
+      console.error('Failed to create goal:', error);
+      throw new AppServiceError('Failed to create goal', 'CREATE_GOAL_ERROR');
+    }
+  }
+
+  async getGoals(status?: GoalStatus): Promise<Goal[]> {
+    if (!this.currentUser) {
+      throw new AppServiceError('No user logged in', 'NOT_AUTHENTICATED');
+    }
+
+    try {
+      if (status) {
+        return await goalRepository.getGoalsByStatus(this.currentUser.id, status);
+      }
+      return await goalRepository.getGoalsByUser(this.currentUser.id);
+    } catch (error) {
+      console.error('Failed to get goals:', error);
+      throw new AppServiceError('Failed to load goals', 'LOAD_GOALS_ERROR');
+    }
+  }
+
+  async updateGoalProgress(goalId: string, progress: number): Promise<Goal> {
+    if (!this.currentUser) {
+      throw new AppServiceError('No user logged in', 'NOT_AUTHENTICATED');
+    }
+
+    try {
+      const goal = await goalRepository.updateProgress(goalId, this.currentUser.id, progress);
+
+      // Queue for sync
+      await syncQueue.addOperation('update', 'goal', goal.id, {
+        progress: goal.progress,
+        status: goal.status,
+        completedAt: goal.completedAt,
+      });
+
+      return goal;
+    } catch (error) {
+      console.error('Failed to update goal progress:', error);
+      throw new AppServiceError('Failed to update goal progress', 'UPDATE_GOAL_ERROR');
+    }
+  }
+
+  async toggleGoalMilestone(goalId: string, milestoneId: string): Promise<Goal> {
+    if (!this.currentUser) {
+      throw new AppServiceError('No user logged in', 'NOT_AUTHENTICATED');
+    }
+
+    try {
+      const goal = await goalRepository.toggleMilestone(goalId, this.currentUser.id, milestoneId);
+
+      // Queue for sync
+      await syncQueue.addOperation('update', 'goal', goal.id, {
+        milestones: goal.milestones,
+        progress: goal.progress,
+      });
+
+      return goal;
+    } catch (error) {
+      console.error('Failed to toggle milestone:', error);
+      throw new AppServiceError('Failed to update milestone', 'UPDATE_MILESTONE_ERROR');
+    }
+  }
+
+  async deleteGoal(goalId: string): Promise<void> {
+    if (!this.currentUser) {
+      throw new AppServiceError('No user logged in', 'NOT_AUTHENTICATED');
+    }
+
+    try {
+      await goalRepository.deleteGoal(goalId);
+
+      // Queue for sync
+      await syncQueue.addOperation('delete', 'goal', goalId, {});
+    } catch (error) {
+      console.error('Failed to delete goal:', error);
+      throw new AppServiceError('Failed to delete goal', 'DELETE_GOAL_ERROR');
+    }
+  }
+
+  // Habit methods
+  async createHabit(data: {
+    name: string;
+    description?: string;
+    frequency: 'daily' | 'weekly' | 'monthly';
+    targetCount?: number;
+    color?: string;
+    icon?: string;
+  }): Promise<Habit> {
+    if (!this.authenticated || !this.currentUser) {
+      throw new AppServiceError('User not authenticated', 'AUTH_ERROR');
+    }
+
+    try {
+      const period = await this.getCurrentPeriod();
+      const habit = await habitRepository.create({
+        ...data,
+        userId: this.currentUser.id,
+        periodId: period?.id,
+        currentStreak: 0,
+        longestStreak: 0,
+        completions: [],
+      });
+
+      await syncQueue.addOperation('create', 'habit', habit.id, habit);
+      return habit;
+    } catch (error) {
+      console.error('Failed to create habit:', error);
+      throw new AppServiceError('Failed to create habit', 'CREATE_HABIT_ERROR');
+    }
+  }
+
+  async getHabits(): Promise<Habit[]> {
+    if (!this.authenticated || !this.currentUser) {
+      throw new AppServiceError('User not authenticated', 'AUTH_ERROR');
+    }
+
+    try {
+      return await habitRepository.findAllByUserId(this.currentUser.id as any);
+    } catch (error) {
+      console.error('Failed to get habits:', error);
+      throw new AppServiceError('Failed to load habits', 'LOAD_HABITS_ERROR');
+    }
+  }
+
+  async getHabitById(id: string): Promise<Habit | null> {
+    if (!this.authenticated || !this.currentUser) {
+      throw new AppServiceError('User not authenticated', 'AUTH_ERROR');
+    }
+
+    try {
+      return await habitRepository.findById(id as any, this.currentUser.id as any);
+    } catch (error) {
+      console.error('Failed to get habit:', error);
+      throw new AppServiceError('Failed to load habit', 'LOAD_HABIT_ERROR');
+    }
+  }
+
+  async updateHabit(id: string, updates: Partial<Omit<Habit, 'id' | 'userId' | 'createdAt' | 'completions' | 'currentStreak' | 'longestStreak'>>): Promise<Habit | null> {
+    if (!this.authenticated || !this.currentUser) {
+      throw new AppServiceError('User not authenticated', 'AUTH_ERROR');
+    }
+
+    try {
+      const habit = await habitRepository.update(id as any, this.currentUser.id as any, updates);
+      if (habit) {
+        await syncQueue.addOperation('update', 'habit', habit.id, habit);
+      }
+      return habit;
+    } catch (error) {
+      console.error('Failed to update habit:', error);
+      throw new AppServiceError('Failed to update habit', 'UPDATE_HABIT_ERROR');
+    }
+  }
+
+  async deleteHabit(id: string): Promise<void> {
+    if (!this.authenticated || !this.currentUser) {
+      throw new AppServiceError('User not authenticated', 'AUTH_ERROR');
+    }
+
+    try {
+      const success = await habitRepository.delete(id as any, this.currentUser.id as any);
+      if (success) {
+        await syncQueue.addOperation('delete', 'habit', id, { id });
+      }
+    } catch (error) {
+      console.error('Failed to delete habit:', error);
+      throw new AppServiceError('Failed to delete habit', 'DELETE_HABIT_ERROR');
+    }
+  }
+
+  async recordHabitCompletion(id: string, date?: string, notes?: string): Promise<Habit | null> {
+    if (!this.authenticated || !this.currentUser) {
+      throw new AppServiceError('User not authenticated', 'AUTH_ERROR');
+    }
+
+    try {
+      const completionDate = date || new Date().toISOString();
+      const habit = await habitRepository.recordCompletion(id as any, this.currentUser.id as any, completionDate, notes);
+      if (habit) {
+        await syncQueue.addOperation('update', 'habit', habit.id, habit);
+      }
+      return habit;
+    } catch (error) {
+      console.error('Failed to record habit completion:', error);
+      throw new AppServiceError('Failed to record completion', 'RECORD_COMPLETION_ERROR');
+    }
+  }
+
+  async removeHabitCompletion(id: string, date: string): Promise<Habit | null> {
+    if (!this.authenticated || !this.currentUser) {
+      throw new AppServiceError('User not authenticated', 'AUTH_ERROR');
+    }
+
+    try {
+      const habit = await habitRepository.removeCompletion(id as any, this.currentUser.id as any, date);
+      if (habit) {
+        await syncQueue.addOperation('update', 'habit', habit.id, habit);
+      }
+      return habit;
+    } catch (error) {
+      console.error('Failed to remove habit completion:', error);
+      throw new AppServiceError('Failed to remove completion', 'REMOVE_COMPLETION_ERROR');
+    }
+  }
+
+  async getHabitsByPeriod(periodId: string): Promise<Habit[]> {
+    if (!this.authenticated || !this.currentUser) {
+      throw new AppServiceError('User not authenticated', 'AUTH_ERROR');
+    }
+
+    try {
+      return await habitRepository.findByPeriodId(periodId, this.currentUser.id as any);
+    } catch (error) {
+      console.error('Failed to get habits by period:', error);
+      throw new AppServiceError('Failed to load habits', 'LOAD_HABITS_ERROR');
     }
   }
 }

@@ -1,6 +1,6 @@
 import { appService } from './app-service';
 import { browserDB } from '../db/browser-db';
-import type { User, JournalEntry } from '../validation/schemas';
+import type { User, JournalEntry, Goal, Habit } from '../validation/schemas';
 
 export interface ExportData {
   version: string;
@@ -8,6 +8,8 @@ export interface ExportData {
   user: User | null;
   periods: any[];
   journalEntries: JournalEntry[];
+  goals: Goal[];
+  habits: Habit[];
 }
 
 export class ExportService {
@@ -24,6 +26,12 @@ export class ExportService {
 
       // Get all periods
       const periods = await this.getAllPeriods(user.id);
+      
+      // Get all goals
+      const goals = await appService.getGoals();
+      
+      // Get all habits
+      const habits = await appService.getHabits();
 
       // Create export object
       const exportData: ExportData = {
@@ -37,7 +45,9 @@ export class ExportService {
         journalEntries: journalEntries.map(entry => ({
           ...entry,
           iv: undefined // Don't export encryption artifacts
-        }))
+        })),
+        goals,
+        habits
       };
 
       return JSON.stringify(exportData, null, 2);
@@ -56,6 +66,8 @@ export class ExportService {
 
       const journalEntries = await appService.getJournalEntries();
       const periods = await this.getAllPeriods(user.id);
+      const goals = await appService.getGoals();
+      const habits = await appService.getHabits();
 
       // Build markdown document
       let markdown = `# MyLife Calendar Export\n\n`;
@@ -112,6 +124,100 @@ export class ExportService {
           }
           
           markdown += '---\n\n';
+        }
+      }
+      
+      // Add goals section
+      if (goals.length > 0) {
+        markdown += `## Goals\n\n`;
+        
+        const activeGoals = goals.filter(g => g.status === 'active');
+        const completedGoals = goals.filter(g => g.status === 'completed');
+        const otherGoals = goals.filter(g => g.status !== 'active' && g.status !== 'completed');
+        
+        if (activeGoals.length > 0) {
+          markdown += `### Active Goals\n\n`;
+          for (const goal of activeGoals) {
+            markdown += `#### ${goal.title}\n`;
+            if (goal.description) markdown += `${goal.description}\n\n`;
+            markdown += `- Category: ${goal.category}\n`;
+            markdown += `- Priority: ${goal.priority}\n`;
+            markdown += `- Progress: ${goal.progress}%\n`;
+            if (goal.targetDate) markdown += `- Target Date: ${new Date(goal.targetDate).toLocaleDateString()}\n`;
+            
+            if (goal.milestones && goal.milestones.length > 0) {
+              markdown += `\n**Milestones:**\n`;
+              goal.milestones.forEach(m => {
+                markdown += `- [${m.completed ? 'x' : ' '}] ${m.title}\n`;
+              });
+            }
+            markdown += '\n';
+          }
+        }
+        
+        if (completedGoals.length > 0) {
+          markdown += `### Completed Goals\n\n`;
+          for (const goal of completedGoals) {
+            markdown += `#### ✅ ${goal.title}\n`;
+            if (goal.completedAt) {
+              markdown += `Completed on: ${new Date(goal.completedAt).toLocaleDateString()}\n`;
+            }
+            markdown += '\n';
+          }
+        }
+      }
+      
+      // Add habits section
+      if (habits.length > 0) {
+        markdown += `## Habits\n\n`;
+        
+        const dailyHabits = habits.filter(h => h.frequency === 'daily');
+        const weeklyHabits = habits.filter(h => h.frequency === 'weekly');
+        const monthlyHabits = habits.filter(h => h.frequency === 'monthly');
+        
+        if (dailyHabits.length > 0) {
+          markdown += `### Daily Habits\n\n`;
+          for (const habit of dailyHabits) {
+            markdown += `#### ${habit.icon || '🎯'} ${habit.name}\n`;
+            if (habit.description) markdown += `${habit.description}\n\n`;
+            markdown += `- Current Streak: ${habit.currentStreak} days\n`;
+            markdown += `- Longest Streak: ${habit.longestStreak} days\n`;
+            markdown += `- Total Completions: ${habit.completions.length}\n`;
+            if (habit.targetCount && habit.targetCount > 1) {
+              markdown += `- Target: ${habit.targetCount} times daily\n`;
+            }
+            markdown += '\n';
+          }
+        }
+        
+        if (weeklyHabits.length > 0) {
+          markdown += `### Weekly Habits\n\n`;
+          for (const habit of weeklyHabits) {
+            markdown += `#### ${habit.icon || '🎯'} ${habit.name}\n`;
+            if (habit.description) markdown += `${habit.description}\n\n`;
+            markdown += `- Current Streak: ${habit.currentStreak} weeks\n`;
+            markdown += `- Longest Streak: ${habit.longestStreak} weeks\n`;
+            markdown += `- Total Completions: ${habit.completions.length}\n`;
+            if (habit.targetCount) {
+              markdown += `- Target: ${habit.targetCount} times weekly\n`;
+            }
+            markdown += '\n';
+          }
+        }
+        
+        if (monthlyHabits.length > 0) {
+          markdown += `### Monthly Habits\n\n`;
+          for (const habit of monthlyHabits) {
+            markdown += `#### ${habit.icon || '🎯'} ${habit.name}\n`;
+            if (habit.description) markdown += `${habit.description}\n\n`;
+            markdown += `- Current Streak: ${habit.currentStreak} months\n`;
+            markdown += `- Longest Streak: ${habit.longestStreak} months\n`;
+            markdown += `- Total Completions: ${habit.completions.length}\n`;
+            if (habit.targetCount) {
+              markdown += `- Target: ${habit.targetCount} times monthly\n`;
+            }
+            markdown += '\n';
+          }
         }
       }
 

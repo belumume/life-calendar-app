@@ -111,3 +111,41 @@ export const sanitizeForDisplay = (input: string): string => {
     .replace(/javascript:/gi, '')
     .replace(/on\w+\s*=/gi, '');
 };
+
+// Helper to sanitize input while preserving structure
+export const sanitizeInput = (input: string): string => {
+  return input.trim().replace(/\s+/g, ' ');
+};
+
+// Goal input schemas
+export const GoalTitleSchema = z.string()
+  .min(1, 'Goal title is required')
+  .max(200, 'Goal title must be less than 200 characters')
+  .transform(sanitizeInput);
+
+export const GoalDescriptionSchema = z.string()
+  .max(1000, 'Description must be less than 1000 characters')
+  .optional()
+  .transform(val => val ? sanitizeInput(val) : undefined);
+
+export const MilestoneTitleSchema = z.string()
+  .min(1, 'Milestone title is required')
+  .max(100, 'Milestone title must be less than 100 characters')
+  .transform(sanitizeInput);
+
+export const GoalFormSchema = z.object({
+  title: GoalTitleSchema,
+  description: GoalDescriptionSchema,
+  category: z.enum(['health', 'career', 'personal', 'financial', 'learning', 'relationship', 'other']),
+  priority: z.enum(['high', 'medium', 'low']),
+  targetDate: z.string().optional(),
+  milestones: z.array(z.object({
+    title: MilestoneTitleSchema,
+  })).optional(),
+});
+
+export type GoalFormData = z.infer<typeof GoalFormSchema>;
+
+export const GoalProgressSchema = z.number()
+  .min(0, 'Progress cannot be negative')
+  .max(100, 'Progress cannot exceed 100%');

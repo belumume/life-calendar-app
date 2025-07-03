@@ -167,7 +167,7 @@ describe('ExportService', () => {
       const content = 'Test content';
       const filename = 'test.json';
 
-      exportService.downloadFile(content, filename);
+      exportService.downloadFile(content, filename, 'application/json');
 
       expect(createElementSpy).toHaveBeenCalledWith('a');
       expect(mockAnchor.download).toBe(filename);
