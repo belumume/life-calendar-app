@@ -1,26 +1,32 @@
 import { render, waitFor } from "@solidjs/testing-library";
-import { describe, it, expect, vi } from "vitest";
-import { Router } from "@solidjs/router";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createMemoryHistory } from "@solidjs/router";
 import Home from "../index";
 
-// Mock window and localStorage for tests
-vi.stubGlobal('window', {
-  ...window,
-  localStorage: {
-    getItem: vi.fn(),
-    setItem: vi.fn(),
-    removeItem: vi.fn(),
-    clear: vi.fn(),
-  }
-});
+// Mock the store module
+vi.mock("../../lib/state/store", () => ({
+  appState: {
+    user: null,
+    isAuthenticated: false,
+    isInitialized: false,
+    error: null,
+    journalEntries: [],
+    currentPeriod: null,
+    goals: [],
+    habits: [],
+    isLoading: false,
+  },
+  checkUserExists: vi.fn().mockResolvedValue(false),
+  initializeApp: vi.fn().mockResolvedValue(true),
+}));
 
 describe("Home Page", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("renders the main heading", async () => {
-    const { getByText } = render(() => (
-      <Router>
-        <Home />
-      </Router>
-    ));
+    const { getByText } = render(() => <Home />);
     
     await waitFor(() => {
       expect(getByText("MyLife Calendar")).toBeInTheDocument();
@@ -28,42 +34,27 @@ describe("Home Page", () => {
   });
 
   it("shows the tagline", async () => {
-    const { getByText } = render(() => (
-      <Router>
-        <Home />
-      </Router>
-    ));
+    const { getByText } = render(() => <Home />);
     
     await waitFor(() => {
       expect(getByText("Track your life journey, one week at a time")).toBeInTheDocument();
     });
   });
 
-  it("displays welcome message for new users", async () => {
-    vi.mocked(window.localStorage.getItem).mockReturnValue(null);
-    
-    const { getByText } = render(() => (
-      <Router>
-        <Home />
-      </Router>
-    ));
+  it("displays privacy features", async () => {
+    const { getByText } = render(() => <Home />);
     
     await waitFor(() => {
-      expect(getByText("Welcome to Your Life Calendar")).toBeInTheDocument();
+      expect(getByText("Your Data, Your Privacy")).toBeInTheDocument();
     });
   });
 
-  it("shows dashboard for existing users", async () => {
-    vi.mocked(window.localStorage.getItem).mockReturnValue("1990-01-01");
-    
-    const { getByText } = render(() => (
-      <Router>
-        <Home />
-      </Router>
-    ));
+  it("shows setup prompt for new users", async () => {
+    const { getByText } = render(() => <Home />);
     
     await waitFor(() => {
-      expect(getByText("Your Life Journey")).toBeInTheDocument();
+      expect(getByText("Welcome to Your Life Calendar")).toBeInTheDocument();
+      expect(getByText("Get Started")).toBeInTheDocument();
     });
   });
 });
