@@ -75,6 +75,8 @@ junit.xml
 *.sqlite-shm
 local-data/
 user-data/
+life-calendar.db
+life-calendar.db-*
 
 # Encryption keys and secrets
 *.key
@@ -109,9 +111,10 @@ backups/
 
 # PWA/Service Worker
 workbox-*.js
-sw.js
 service-worker.js
 precache-manifest.*
+# Don't ignore our custom service worker
+!public/sw.js
 
 # Build analysis
 stats.json
@@ -124,6 +127,8 @@ bundle-report/
 
 # Vitest
 .vitest-cache/
+vitest-results.json
+html/
 
 # SolidJS specific
 .solid-start/
@@ -172,6 +177,9 @@ _site/
 .claude/
 !.claude.md
 CLAUDE.md.backup
+
+# IndexedDB (browser stores this locally, not in files)
+# No need to ignore as it's stored in browser's storage
 
 # Deployment
 .firebase/
