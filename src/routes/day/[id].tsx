@@ -1,6 +1,13 @@
-import { createSignal, Show } from "solid-js";
+import { createSignal, Show, onMount, createEffect, For } from "solid-js";
 import { Title } from "@solidjs/meta";
-import { A, useParams } from "@solidjs/router";
+import { A, useParams, useNavigate } from "@solidjs/router";
+import { appService } from "../../lib/services/app-service";
+import { useApp } from "../../lib/context/AppContext";
+import JournalEntryForm from "../../components/JournalEntryForm";
+import JournalEntryDisplay from "../../components/JournalEntryDisplay";
+import type { JournalEntry } from "../../lib/validation/schemas";
+import type { z } from "zod";
+import type { JournalEntryFormSchema } from "../../lib/validation/input-schemas";
 
 interface Goal {
   id: string;
@@ -10,11 +17,15 @@ interface Goal {
 
 export default function DayView() {
   const params = useParams();
+  const navigate = useNavigate();
+  const app = useApp();
   const dayNumber = parseInt(params.id);
   
-  const [journalEntry, setJournalEntry] = createSignal("");
-  const [achievements, setAchievements] = createSignal("");
-  const [tomorrowFocus, setTomorrowFocus] = createSignal("");
+  const [existingEntry, setExistingEntry] = createSignal<JournalEntry | null>(null);
+  const [isLoading, setIsLoading] = createSignal(true);
+  const [isSubmitting, setIsSubmitting] = createSignal(false);
+  const [error, setError] = createSignal<string | null>(null);
+  const [showForm, setShowForm] = createSignal(false);
   
   const [goals, setGoals] = createSignal<Goal[]>([
     { id: "1", text: "Morning Routine", completed: false },
@@ -22,11 +33,69 @@ export default function DayView() {
     { id: "3", text: "Exercise", completed: true },
     { id: "4", text: "Evening Reflection", completed: false },
   ]);
+  
+  // Redirect if not authenticated
+  createEffect(() => {
+    if (!app.isLoading() && !app.user()) {
+      navigate("/");
+    } else if (!app.isLoading() && app.user() && !app.isAuthenticated()) {
+      navigate("/login");
+    }
+  });
+  
+  // Load existing entry for this day
+  onMount(async () => {
+    if (!app.isAuthenticated()) return;
+    
+    try {
+      const entries = await appService.getJournalEntries();
+      const dayEntry = entries.find(e => e.dayNumber === dayNumber);
+      if (dayEntry) {
+        setExistingEntry(dayEntry);
+      } else {
+        setShowForm(true);
+      }
+    } catch (err) {
+      console.error("Failed to load journal entry:", err);
+      setError(err instanceof Error ? err.message : "Failed to load entry");
+    } finally {
+      setIsLoading(false);
+    }
+  });
 
   const toggleGoal = (id: string) => {
     setGoals(goals().map(goal => 
       goal.id === id ? { ...goal, completed: !goal.completed } : goal
     ));
+  };
+  
+  const handleJournalSubmit = async (formData: z.infer<typeof JournalEntryFormSchema>) => {
+    setIsSubmitting(true);
+    setError(null);
+    
+    try {
+      const entry = await appService.addJournalEntry(
+        formData.content,
+        dayNumber,
+        formData.mood,
+        formData.tags,
+        formData.achievements,
+        formData.gratitude
+      );
+      
+      setExistingEntry(entry);
+      setShowForm(false);
+    } catch (err) {
+      console.error("Failed to add journal entry:", err);
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Failed to save entry");
+      }
+      throw err;
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const currentDate = new Date();
@@ -50,41 +119,40 @@ export default function DayView() {
         <p>📅 Day {dayNumber} of 88 | Week {Math.ceil(dayNumber / 7)}</p>
       </div>
 
-      <section class="journal-section">
-        <h2>Journal Entry</h2>
-        <div class="journal-form">
-          <div class="form-group">
-            <label>What made today remarkable?</label>
-            <textarea
-              value={journalEntry()}
-              onInput={(e) => setJournalEntry(e.currentTarget.value)}
-              placeholder="Reflect on your day..."
-              rows="4"
-            />
-          </div>
-
-          <div class="form-group">
-            <label>Progress & Achievements:</label>
-            <textarea
-              value={achievements()}
-              onInput={(e) => setAchievements(e.currentTarget.value)}
-              placeholder="• What did you accomplish?
-• What progress did you make?"
-              rows="3"
-            />
-          </div>
-
-          <div class="form-group">
-            <label>Tomorrow's Focus:</label>
-            <textarea
-              value={tomorrowFocus()}
-              onInput={(e) => setTomorrowFocus(e.currentTarget.value)}
-              placeholder="What will you focus on tomorrow?"
-              rows="2"
-            />
-          </div>
-        </div>
-      </section>
+      <Show when={!isLoading()} fallback={<div class="loading">Loading...</div>}>
+        <section class="journal-section">
+          <h2>Journal Entry</h2>
+          <Show
+            when={existingEntry()}
+            fallback={
+              <Show
+                when={showForm()}
+                fallback={
+                  <div style={{ "text-align": "center" }}>
+                    <p>No entry yet for this day.</p>
+                    <button class="btn-primary" onClick={() => setShowForm(true)}>
+                      Create Entry
+                    </button>
+                  </div>
+                }
+              >
+                <JournalEntryForm
+                  onSubmit={handleJournalSubmit}
+                  isSubmitting={isSubmitting()}
+                  error={error()}
+                />
+              </Show>
+            }
+          >
+            <JournalEntryDisplay entry={existingEntry()!} showDate={false} />
+            <div style={{ "margin-top": "1rem", "text-align": "center" }}>
+              <button class="btn-secondary" onClick={() => setShowForm(true)}>
+                Edit Entry
+              </button>
+            </div>
+          </Show>
+        </section>
+      </Show>
 
       <section class="goals-section">
         <h2>Goals & Habits</h2>
@@ -109,16 +177,22 @@ export default function DayView() {
       </section>
 
       <nav class="day-navigation">
-        <button class="btn-primary">Save Entry</button>
         <div class="nav-links">
           <Show when={dayNumber > 1}>
             <A href={`/day/${dayNumber - 1}`} class="btn-secondary">← Previous Day</A>
           </Show>
+          <A href="/period" class="btn-secondary">Back to Overview</A>
           <Show when={dayNumber < 88}>
             <A href={`/day/${dayNumber + 1}`} class="btn-secondary">Next Day →</A>
           </Show>
         </div>
       </nav>
+      
+      <Show when={error()}>
+        <div class="error-message" role="alert">
+          {error()}
+        </div>
+      </Show>
     </main>
   );
 }

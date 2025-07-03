@@ -2,20 +2,23 @@ import { createSignal, For, Show, onMount, createMemo, createEffect } from "soli
 import { A, useNavigate } from "@solidjs/router";
 import { appService } from "../../lib/services/app-service";
 import type { JournalEntry } from "../../lib/validation/schemas";
-import { JournalContentSchema, sanitizeForDisplay } from "../../lib/validation/input-schemas";
-import { z } from "zod";
+import { sanitizeForDisplay } from "../../lib/validation/input-schemas";
 import { useApp } from "../../lib/context/AppContext";
+import JournalEntryForm from "../../components/JournalEntryForm";
+import JournalEntryDisplay from "../../components/JournalEntryDisplay";
+import type { z } from "zod";
+import type { JournalEntryFormSchema } from "../../lib/validation/input-schemas";
 
 export default function PeriodView() {
   const navigate = useNavigate();
   const app = useApp();
   
-  const [dailyNote, setDailyNote] = createSignal("");
   const [entries, setEntries] = createSignal<JournalEntry[]>([]);
   const [currentPeriod, setCurrentPeriod] = createSignal<any>(null);
   const [isLoading, setIsLoading] = createSignal(true);
   const [isSubmitting, setIsSubmitting] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
+  const [showJournalForm, setShowJournalForm] = createSignal(false);
   
   // Redirect if not authenticated
   createEffect(() => {
@@ -68,27 +71,30 @@ export default function PeriodView() {
     return "future";
   };
 
-  const handleAddNote = async () => {
-    if (!dailyNote().trim() || isSubmitting()) return;
-    
+  const handleJournalSubmit = async (formData: z.infer<typeof JournalEntryFormSchema>) => {
     setIsSubmitting(true);
     setError(null);
+    
     try {
-      // Validate journal content
-      const validatedContent = JournalContentSchema.parse(dailyNote());
+      const entry = await appService.addJournalEntry(
+        formData.content,
+        currentDay(),
+        formData.mood,
+        formData.tags,
+        formData.achievements,
+        formData.gratitude
+      );
       
-      const entry = await appService.addJournalEntry(validatedContent, currentDay());
       setEntries([...entries(), entry]);
-      setDailyNote("");
+      setShowJournalForm(false);
     } catch (err) {
-      console.error("Failed to add note:", err);
-      if (err instanceof z.ZodError) {
-        setError(err.errors[0].message);
-      } else if (err instanceof Error) {
+      console.error("Failed to add journal entry:", err);
+      if (err instanceof Error) {
         setError(err.message);
       } else {
         setError("Failed to save entry");
       }
+      throw err; // Re-throw so the form knows submission failed
     } finally {
       setIsSubmitting(false);
     }
@@ -116,20 +122,23 @@ export default function PeriodView() {
       </div>
 
       <div class="daily-input">
-        <h3>How was today?</h3>
-        <textarea
-          placeholder="What did you accomplish? What are you grateful for?"
-          value={dailyNote()}
-          onInput={(e) => setDailyNote(e.currentTarget.value)}
-          rows={3}
-        />
-        <button 
-          class="btn-primary"
-          onClick={handleAddNote}
-          disabled={!dailyNote().trim() || isSubmitting()}
+        <Show
+          when={showJournalForm()}
+          fallback={
+            <button
+              class="btn-primary"
+              onClick={() => setShowJournalForm(true)}
+            >
+              Add Today's Entry
+            </button>
+          }
         >
-          {isSubmitting() ? "Saving..." : "Save Today's Entry"}
-        </button>
+          <JournalEntryForm
+            onSubmit={handleJournalSubmit}
+            isSubmitting={isSubmitting()}
+            error={error()}
+          />
+        </Show>
       </div>
 
       <div class="weeks-grid-container">
@@ -165,9 +174,10 @@ export default function PeriodView() {
           <h3>Recent Entries</h3>
           <For each={entries().slice(-5).reverse()}>
             {(entry) => (
-              <div class="entry">
-                <strong>Day {entry.dayNumber}:</strong> {sanitizeForDisplay(entry.content)}
-              </div>
+              <JournalEntryDisplay 
+                entry={entry}
+                showDate={true}
+              />
             )}
           </For>
         </div>
