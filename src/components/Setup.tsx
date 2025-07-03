@@ -1,5 +1,6 @@
 import { createSignal, Show } from "solid-js";
 import { useNavigate } from "@solidjs/router";
+import { appService } from "../lib/services/app-service";
 
 export default function Setup() {
   const [birthDate, setBirthDate] = createSignal("");
@@ -51,17 +52,12 @@ export default function Setup() {
         return;
       }
 
-      // For now, just save to localStorage
-      const userData = {
-        id: crypto.randomUUID(),
-        birthDate: birthDate(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
+      // Create account using IndexedDB service
+      await appService.createAccount(birthDate(), passphrase());
       
+      // Keep localStorage for backward compatibility temporarily
       localStorage.setItem("birthDate", birthDate());
-      localStorage.setItem("user", JSON.stringify(userData));
-      localStorage.setItem("passphrase", passphrase()); // Note: This is NOT secure, just for testing
+      localStorage.setItem("user", JSON.stringify({ birthDate: birthDate() }));
       
       navigate("/period");
     } catch (err) {

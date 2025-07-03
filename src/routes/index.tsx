@@ -1,17 +1,24 @@
 import { createSignal, onMount, Show } from "solid-js";
 import { A } from "@solidjs/router";
+import { appService } from "../lib/services/app-service";
 
 export default function Home() {
   const [isLoading, setIsLoading] = createSignal(true);
   const [hasUser, setHasUser] = createSignal(false);
 
-  onMount(() => {
-    // Simple check for existing user
-    const userData = localStorage.getItem("birthDate");
-    if (userData) {
-      setHasUser(true);
+  onMount(async () => {
+    try {
+      await appService.initialize();
+      
+      // Check both IndexedDB and localStorage for backward compatibility
+      if (appService.hasUser() || localStorage.getItem("birthDate")) {
+        setHasUser(true);
+      }
+    } catch (error) {
+      console.error("Failed to initialize:", error);
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   });
 
   return (
@@ -26,10 +33,10 @@ export default function Home() {
             fallback={
               <div class="dashboard-preview">
                 <h2>Your Life Journey</h2>
-                <p>Welcome back! Your life calendar is ready.</p>
+                <p>Welcome back! Please unlock your calendar to continue.</p>
                 <div class="home-nav">
-                  <A href="/period" class="btn-primary">88-Day Tracker</A>
-                  <A href="/life" class="btn-secondary">Life Calendar</A>
+                  <A href="/login" class="btn-primary">Unlock Calendar</A>
+                  <A href="/period" class="btn-secondary">88-Day Tracker</A>
                 </div>
               </div>
             }

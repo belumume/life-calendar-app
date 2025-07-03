@@ -630,6 +630,54 @@ h1 {
   color: var(--color-text-secondary);
 }
 
+/* Error handling */
+.error-message {
+  background-color: #fee;
+  color: #d00;
+  padding: 1rem;
+  border-radius: 8px;
+  margin: 1rem 0;
+  border-left: 4px solid #d00;
+}
+
+.error-boundary {
+  max-width: 600px;
+  margin: 4rem auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+.error-boundary h2 {
+  color: #d00;
+  margin-bottom: 1rem;
+}
+
+.error-boundary details {
+  text-align: left;
+  margin: 2rem 0;
+  padding: 1rem;
+  background-color: #f5f5f5;
+  border-radius: 8px;
+}
+
+.error-boundary summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.error-boundary pre {
+  margin-top: 1rem;
+  overflow-x: auto;
+  font-size: 0.875rem;
+}
+
+.error-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 2rem;
+}
+
 /* Recent entries */
 .recent-entries {
   margin-top: 2rem;
