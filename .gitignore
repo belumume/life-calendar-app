@@ -212,6 +212,9 @@ debug/
 *.xlsx
 *.pptx
 
+# Screenshots
+Screenshot*.png
+
 # Keep important config examples
 !*.example
 !*.sample
