@@ -1,6 +1,6 @@
 import { createSignal, Show, For } from "solid-js";
 import { JournalEntryFormSchema, MoodSchema, TagSchema, ListItemSchema } from "../lib/validation/input-schemas";
-import type { z } from "zod";
+import { z } from "zod";
 
 interface JournalEntryFormProps {
   onSubmit: (data: z.infer<typeof JournalEntryFormSchema>) => Promise<void>;

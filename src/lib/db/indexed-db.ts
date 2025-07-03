@@ -1,4 +1,4 @@
-import { openDB, DBSchema, IDBPDatabase } from 'idb';
+import { openDB, DBSchema, IDBPDatabase, deleteDB } from 'idb';
 import type { User, JournalEntry, Goal, Habit, Period } from '../validation/schemas';
 
 // Define the database schema

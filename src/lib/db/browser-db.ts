@@ -1,5 +1,5 @@
 import { openDB, IDBPDatabase } from 'idb';
-import type { User, JournalEntry } from '../validation/schemas';
+import type { User, JournalEntry, Habit } from '../validation/schemas';
 import { UserSchema, JournalEntrySchema } from '../validation/schemas';
 
 interface AppDB {
@@ -42,14 +42,45 @@ interface AppDB {
     };
     indexes: { 'by-user': string; 'by-active': number };
   };
+  goals: {
+    key: string;
+    value: {
+      id: string;
+      userId: string;
+      periodId?: string;
+      title: string;
+      description?: string;
+      category: string;
+      priority: string;
+      status: string;
+      targetDate?: string;
+      progress: number;
+      milestones?: Array<{
+        id: string;
+        title: string;
+        completed: boolean;
+        completedDate?: string;
+      }>;
+      linkedHabitIds?: string[];
+      createdAt: string;
+      updatedAt: string;
+      completedAt?: string;
+    };
+    indexes: { 'by-user': string; 'by-status': string; 'by-period': string };
+  };
+  habits: {
+    key: string;
+    value: Habit;
+    indexes: { 'by-user': string; 'by-period': string };
+  };
 }
 
 class BrowserDatabase {
   private db: IDBPDatabase<AppDB> | null = null;
 
   async init() {
-    this.db = await openDB<AppDB>('life-calendar', 1, {
-      upgrade(db) {
+    this.db = await openDB<AppDB>('life-calendar', 3, {
+      upgrade(db, oldVersion) {
         // Users store
         if (!db.objectStoreNames.contains('users')) {
           db.createObjectStore('users', { keyPath: 'id' });
@@ -67,6 +98,21 @@ class BrowserDatabase {
           const periodsStore = db.createObjectStore('periods', { keyPath: 'id' });
           periodsStore.createIndex('by-user', 'userId');
           periodsStore.createIndex('by-active', 'isActive');
+        }
+
+        // Goals store (added in version 2)
+        if (!db.objectStoreNames.contains('goals')) {
+          const goalsStore = db.createObjectStore('goals', { keyPath: 'id' });
+          goalsStore.createIndex('by-user', 'userId');
+          goalsStore.createIndex('by-status', 'status');
+          goalsStore.createIndex('by-period', 'periodId');
+        }
+
+        // Habits store (added in version 3)
+        if (!db.objectStoreNames.contains('habits')) {
+          const habitsStore = db.createObjectStore('habits', { keyPath: 'id' });
+          habitsStore.createIndex('by-user', 'userId');
+          habitsStore.createIndex('by-period', 'periodId');
         }
       },
     });
@@ -171,12 +217,91 @@ class BrowserDatabase {
 
   async clear() {
     if (!this.db) await this.init();
-    const tx = this.db!.transaction(['users', 'entries', 'periods'], 'readwrite');
+    const tx = this.db!.transaction(['users', 'entries', 'periods', 'goals', 'habits'], 'readwrite');
     await Promise.all([
       tx.objectStore('users').clear(),
       tx.objectStore('entries').clear(),
       tx.objectStore('periods').clear(),
+      tx.objectStore('goals').clear(),
+      tx.objectStore('habits').clear(),
     ]);
+  }
+
+  // Goal methods
+  async saveGoal(goal: any): Promise<void> {
+    if (!this.db) await this.init();
+    await this.db!.put('goals', {
+      ...goal,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  async getGoals(userId: string): Promise<any[]> {
+    if (!this.db) await this.init();
+    return await this.db!.getAllFromIndex('goals', 'by-user', userId);
+  }
+
+  async getGoalsByStatus(userId: string, status: string): Promise<any[]> {
+    if (!this.db) await this.init();
+    const allGoals = await this.getGoals(userId);
+    return allGoals.filter(g => g.status === status);
+  }
+
+  async getGoalsByPeriod(periodId: string): Promise<any[]> {
+    if (!this.db) await this.init();
+    return await this.db!.getAllFromIndex('goals', 'by-period', periodId);
+  }
+
+  async deleteGoal(goalId: string): Promise<void> {
+    if (!this.db) await this.init();
+    await this.db!.delete('goals', goalId);
+  }
+
+  // Habit methods
+  async addHabit(habit: Habit): Promise<void> {
+    if (!this.db) await this.init();
+    await this.db!.put('habits', habit);
+  }
+
+  async getHabitById(id: string, userId: string): Promise<Habit | null> {
+    if (!this.db) await this.init();
+    const habit = await this.db!.get('habits', id);
+    return (habit && habit.userId === userId) ? habit : null;
+  }
+
+  async getHabitsByUserId(userId: string): Promise<Habit[]> {
+    if (!this.db) await this.init();
+    return await this.db!.getAllFromIndex('habits', 'by-user', userId);
+  }
+
+  async getHabitsByPeriodId(periodId: string, userId: string): Promise<Habit[]> {
+    if (!this.db) await this.init();
+    const habits = await this.db!.getAllFromIndex('habits', 'by-period', periodId);
+    return habits.filter(h => h.userId === userId);
+  }
+
+  async updateHabit(id: string, userId: string, updates: Partial<Omit<Habit, 'id' | 'userId' | 'createdAt'>>): Promise<Habit | null> {
+    if (!this.db) await this.init();
+    const habit = await this.getHabitById(id, userId);
+    if (!habit) return null;
+
+    const updated = {
+      ...habit,
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await this.db!.put('habits', updated);
+    return updated;
+  }
+
+  async deleteHabit(id: string, userId: string): Promise<boolean> {
+    if (!this.db) await this.init();
+    const habit = await this.getHabitById(id, userId);
+    if (!habit) return false;
+
+    await this.db!.delete('habits', id);
+    return true;
   }
 }
 

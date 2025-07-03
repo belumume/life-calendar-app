@@ -57,20 +57,31 @@ export const JournalEntrySchema = z.object({
 });
 
 // Goal Schema
+export const GoalStatus = z.enum(['active', 'completed', 'paused', 'cancelled']);
+export const GoalPriority = z.enum(['high', 'medium', 'low']);
+export const GoalCategory = z.enum(['health', 'career', 'personal', 'financial', 'learning', 'relationship', 'other']);
+
 export const GoalSchema = z.object({
   id: z.string().uuid(),
   userId: z.string().uuid(),
   periodId: z.string().uuid().optional(),
   title: z.string().min(1).max(200),
   description: z.string().optional(),
-  targetDate: z.string().datetime().optional(),
-  completed: z.boolean(),
-  completedAt: z.string().datetime().optional(),
-  progress: z.number().min(0).max(100).optional(),
-  category: z.string().optional(),
-  priority: z.enum(['low', 'medium', 'high']).optional(),
+  category: GoalCategory.default('personal'),
+  priority: GoalPriority.default('medium'),
+  status: GoalStatus.default('active'),
+  targetDate: z.string().optional(), // Date string, not datetime
+  progress: z.number().min(0).max(100).default(0),
+  milestones: z.array(z.object({
+    id: z.string(),
+    title: z.string(),
+    completed: z.boolean(),
+    completedDate: z.string().optional(),
+  })).optional(),
+  linkedHabitIds: z.array(z.string()).optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
+  completedAt: z.string().datetime().optional(),
 });
 
 // Habit Schema
@@ -106,6 +117,9 @@ export type User = z.infer<typeof UserSchema>;
 export type Period = z.infer<typeof PeriodSchema>;
 export type JournalEntry = z.infer<typeof JournalEntrySchema>;
 export type Goal = z.infer<typeof GoalSchema>;
+export type GoalStatus = z.infer<typeof GoalStatus>;
+export type GoalPriority = z.infer<typeof GoalPriority>;
+export type GoalCategory = z.infer<typeof GoalCategory>;
 export type Habit = z.infer<typeof HabitSchema>;
 export type EncryptedData = z.infer<typeof EncryptedDataSchema>;
 
