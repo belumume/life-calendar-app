@@ -17,7 +17,8 @@ export const createPeriodId = (id: string): PeriodId => id as PeriodId;
 // User Schema
 export const UserSchema = z.object({
   id: z.string().uuid(),
-  birthDate: z.string().datetime(),
+  birthDate: z.string(), // Date string from input, not full datetime
+  salt: z.string().optional(), // Base64 encoded salt for key derivation
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -46,6 +47,7 @@ export const JournalEntrySchema = z.object({
   date: z.string().datetime(),
   dayNumber: z.number().int().positive().optional(),
   content: z.string().min(1),
+  iv: z.string().optional(), // For encryption
   mood: z.enum(['great', 'good', 'neutral', 'bad', 'terrible']).optional(),
   tags: z.array(z.string()).optional(),
   achievements: z.array(z.string()).optional(),
@@ -106,3 +108,7 @@ export type JournalEntry = z.infer<typeof JournalEntrySchema>;
 export type Goal = z.infer<typeof GoalSchema>;
 export type Habit = z.infer<typeof HabitSchema>;
 export type EncryptedData = z.infer<typeof EncryptedDataSchema>;
+
+// Creation schemas (for validation of new entities)
+export const createUserSchema = UserSchema;
+export const createJournalEntrySchema = JournalEntrySchema;

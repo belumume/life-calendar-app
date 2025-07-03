@@ -3,6 +3,7 @@ import { Router } from "@solidjs/router";
 import { FileRoutes } from "@solidjs/start/router";
 import { Suspense, onMount } from "solid-js";
 import { registerServiceWorker, requestPersistentStorage } from "./lib/sw/register";
+import ErrorBoundary from "./components/ErrorBoundary";
 import "./app.css";
 
 export default function App() {
@@ -20,7 +21,9 @@ export default function App() {
       root={(props) => (
         <MetaProvider>
           <Title>MyLife Calendar</Title>
-          <Suspense>{props.children}</Suspense>
+          <ErrorBoundary>
+            <Suspense>{props.children}</Suspense>
+          </ErrorBoundary>
         </MetaProvider>
       )}
     >

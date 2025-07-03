@@ -1,6 +1,7 @@
 import { createSignal, Show, onMount } from "solid-js";
-import { A, useNavigate } from "@solidjs/router";
-import { appService } from "../lib/services/app-service";
+import { Title } from "@solidjs/meta";
+import { useNavigate } from "@solidjs/router";
+import { appState, authenticate, initializeApp } from "../lib/state/store";
 
 export default function Login() {
   const [passphrase, setPassphrase] = createSignal("");
@@ -11,19 +12,20 @@ export default function Login() {
   const navigate = useNavigate();
 
   onMount(async () => {
-    try {
-      await appService.initialize();
-      
-      // If no user exists, redirect to setup
-      if (!appService.hasUser()) {
-        navigate("/setup");
-        return;
-      }
-    } catch (err) {
-      console.error("Failed to initialize:", err);
-      setError("Failed to load. Please refresh and try again.");
-    } finally {
-      setIsLoading(false);
+    // Initialize app to check for user
+    await initializeApp();
+    setIsLoading(false);
+    
+    // If no user exists, redirect to setup
+    if (!appState.user) {
+      navigate("/setup");
+      return;
+    }
+    
+    // If already authenticated, redirect to home
+    if (appState.isAuthenticated) {
+      navigate("/");
+      return;
     }
   });
 
@@ -38,24 +40,34 @@ export default function Login() {
         return;
       }
 
-      const success = await appService.login(passphrase());
+      const success = await authenticate(passphrase());
       
       if (success) {
-        navigate("/period");
+        navigate("/");
       } else {
         setError("Invalid passphrase. Please try again.");
+        // Clear the passphrase field for security
         setPassphrase("");
       }
     } catch (err) {
       console.error("Login error:", err);
-      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+      setError("Something went wrong. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const handleForgotPassphrase = () => {
+    if (confirm("Without your passphrase, your data cannot be recovered. Would you like to start fresh with a new calendar?")) {
+      // TODO: Implement data reset functionality
+      navigate("/reset");
+    }
+  };
+
   return (
     <main class="container">
+      <Title>Login - MyLife Calendar</Title>
+      
       <Show when={!isLoading()} fallback={<div class="loading">Loading...</div>}>
         <div class="login-container">
           <h1>Welcome Back</h1>
@@ -101,9 +113,13 @@ export default function Login() {
           </form>
 
           <div class="login-footer">
-            <A href="/setup" class="link-button">
-              Create new calendar
-            </A>
+            <button 
+              type="button"
+              class="link-button"
+              onClick={handleForgotPassphrase}
+            >
+              Forgot your passphrase?
+            </button>
           </div>
 
           <div class="privacy-note">

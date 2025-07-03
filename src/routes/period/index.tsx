@@ -1,61 +1,92 @@
-import { createSignal, For, Show, onMount } from "solid-js";
+import { createSignal, For, Show, onMount, createMemo } from "solid-js";
 import { A, useNavigate } from "@solidjs/router";
+import { appService } from "../../lib/services/app-service";
+import type { JournalEntry } from "../../lib/validation/schemas";
 
 export default function PeriodView() {
   const navigate = useNavigate();
   const [dailyNote, setDailyNote] = createSignal("");
-  const [entries, setEntries] = createSignal<Array<{day: number, note: string}>>([]);
+  const [entries, setEntries] = createSignal<JournalEntry[]>([]);
+  const [currentPeriod, setCurrentPeriod] = createSignal<any>(null);
+  const [isLoading, setIsLoading] = createSignal(true);
+  const [isSubmitting, setIsSubmitting] = createSignal(false);
+  const [error, setError] = createSignal<string | null>(null);
   
-  // Check if user exists
-  onMount(() => {
-    const userData = localStorage.getItem("user");
-    if (!userData) {
-      navigate("/");
-      return;
-    }
-    
-    // Load saved entries
-    const savedEntries = localStorage.getItem("entries");
-    if (savedEntries) {
-      setEntries(JSON.parse(savedEntries));
+  // Check if user exists and load data
+  onMount(async () => {
+    try {
+      await appService.initialize();
+      
+      if (!appService.hasUser()) {
+        navigate("/");
+        return;
+      }
+      
+      // Load current period and entries
+      const period = await appService.getCurrentPeriod();
+      setCurrentPeriod(period);
+      
+      const journalEntries = await appService.getJournalEntries();
+      setEntries(journalEntries);
+    } catch (err) {
+      console.error("Failed to load data:", err);
+      setError(err instanceof Error ? err.message : "Failed to load data");
+    } finally {
+      setIsLoading(false);
     }
   });
 
-  const totalDays = 88;
-  const currentDay = 15; // Hardcoded for now
-  const progress = () => (currentDay / totalDays) * 100;
-  const weeksCount = Math.ceil(totalDays / 7);
+  // Calculate current day based on period start date
+  const currentDay = createMemo(() => {
+    const period = currentPeriod();
+    if (!period) return 1;
+    
+    const start = new Date(period.startDate);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - start.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return Math.min(diffDays + 1, period.totalDays || 88);
+  });
+  
+  const totalDays = () => currentPeriod()?.totalDays || 88;
+  const progress = () => (currentDay() / totalDays()) * 100;
+  const weeksCount = Math.ceil(totalDays() / 7);
 
   const getDayStatus = (day: number) => {
-    if (day < currentDay) return "completed";
-    if (day === currentDay) return "current";
+    if (day < currentDay()) return "completed";
+    if (day === currentDay()) return "current";
     return "future";
   };
 
-  const handleAddNote = () => {
-    if (!dailyNote().trim()) return;
+  const handleAddNote = async () => {
+    if (!dailyNote().trim() || isSubmitting()) return;
     
-    const newEntry = { day: currentDay, note: dailyNote() };
-    const updatedEntries = [...entries(), newEntry];
-    setEntries(updatedEntries);
-    
-    // Save to localStorage
-    localStorage.setItem("entries", JSON.stringify(updatedEntries));
-    
-    setDailyNote("");
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      const entry = await appService.addJournalEntry(dailyNote(), currentDay());
+      setEntries([...entries(), entry]);
+      setDailyNote("");
+    } catch (err) {
+      console.error("Failed to add note:", err);
+      setError(err instanceof Error ? err.message : "Failed to save entry");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <main class="period-view">
-      <header class="view-header">
-        <A href="/" class="back-link">← Back</A>
-        <h1>88 Days of Summer</h1>
-        <A href="/life" class="icon-link">📅</A>
-      </header>
+      <Show when={!isLoading()} fallback={<div class="loading">Loading your journey...</div>}>
+        <header class="view-header">
+          <A href="/" class="back-link">← Back</A>
+          <h1>{currentPeriod()?.name || "88 Days of Summer"}</h1>
+          <A href="/life" class="icon-link">📅</A>
+        </header>
 
       <div class="progress-section">
         <p class="progress-text">
-          Progress: Day {currentDay} of {totalDays} ({progress().toFixed(0)}%)
+          Progress: Day {currentDay()} of {totalDays()} ({progress().toFixed(0)}%)
         </p>
         <div class="progress-bar">
           <div class="progress-fill" style={{ width: `${progress()}%` }}></div>
@@ -73,9 +104,9 @@ export default function PeriodView() {
         <button 
           class="btn-primary"
           onClick={handleAddNote}
-          disabled={!dailyNote().trim()}
+          disabled={!dailyNote().trim() || isSubmitting()}
         >
-          Save Today's Entry
+          {isSubmitting() ? "Saving..." : "Save Today's Entry"}
         </button>
       </div>
 
@@ -88,7 +119,7 @@ export default function PeriodView() {
                 <For each={Array(7).fill(0)}>
                   {(_, dayIndex) => {
                     const dayNumber = weekIndex() * 7 + dayIndex() + 1;
-                    if (dayNumber <= totalDays) {
+                    if (dayNumber <= totalDays()) {
                       return (
                         <A
                           href={`/day/${dayNumber}`}
@@ -113,11 +144,18 @@ export default function PeriodView() {
           <For each={entries().slice(-5).reverse()}>
             {(entry) => (
               <div class="entry">
-                <strong>Day {entry.day}:</strong> {entry.note}
+                <strong>Day {entry.dayNumber}:</strong> {entry.content}
               </div>
             )}
           </For>
         </div>
+      </Show>
+      
+      <Show when={error()}>
+        <div class="error-message" role="alert">
+          {error()}
+        </div>
+      </Show>
       </Show>
     </main>
   );
