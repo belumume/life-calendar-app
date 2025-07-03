@@ -12,6 +12,3 @@ export * from './repositories';
 
 // Export types
 export type { User, JournalEntry, Period, Goal, Habit } from '../validation/schemas';
-
-// Also export SQLite implementation for server-side/electron use
-export * as SQLite from './database';
