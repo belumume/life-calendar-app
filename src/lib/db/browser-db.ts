@@ -1,5 +1,6 @@
 import { openDB, IDBPDatabase } from 'idb';
 import type { User, JournalEntry } from '../validation/schemas';
+import { UserSchema, JournalEntrySchema } from '../validation/schemas';
 
 interface AppDB {
   users: {
@@ -73,7 +74,10 @@ class BrowserDatabase {
 
   async saveUser(user: User): Promise<void> {
     if (!this.db) await this.init();
-    await this.db!.put('users', user);
+    
+    // Validate before saving
+    const validated = UserSchema.parse(user);
+    await this.db!.put('users', validated);
   }
 
   async getEntries(userId: string): Promise<JournalEntry[]> {
@@ -92,10 +96,19 @@ class BrowserDatabase {
 
   async saveEntry(entry: any): Promise<void> {
     if (!this.db) await this.init();
-    await this.db!.put('entries', {
+    
+    // Ensure entry has required fields for validation
+    const entryToValidate = {
       ...entry,
       updatedAt: new Date().toISOString(),
-    });
+    };
+    
+    // Validate essential fields (skip full validation as entry might have encrypted content)
+    if (!entryToValidate.id || !entryToValidate.userId || !entryToValidate.date) {
+      throw new Error('Invalid entry: missing required fields');
+    }
+    
+    await this.db!.put('entries', entryToValidate);
   }
 
   async getActivePeriod(userId: string): Promise<any | null> {

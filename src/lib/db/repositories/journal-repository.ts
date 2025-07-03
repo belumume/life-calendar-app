@@ -1,6 +1,7 @@
 import { browserDB } from '../browser-db';
 import type { JournalEntry } from '../../validation/schemas';
-import { createJournalEntrySchema } from '../../validation/schemas';
+import { JournalEntrySchema } from '../../validation/schemas';
+import { JournalContentSchema, DayNumberSchema } from '../../validation/input-schemas';
 
 export class JournalRepository {
   async createEntry(data: Omit<JournalEntry, 'id' | 'createdAt' | 'updatedAt'>): Promise<JournalEntry> {
@@ -12,7 +13,7 @@ export class JournalRepository {
     };
 
     // Validate before saving
-    const validated = createJournalEntrySchema.parse(entry);
+    const validated = JournalEntrySchema.parse(entry);
     await browserDB.saveEntry(validated);
     
     return validated;

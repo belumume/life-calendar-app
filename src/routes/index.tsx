@@ -1,44 +1,41 @@
-import { createSignal, onMount, Show } from "solid-js";
+import { Show } from "solid-js";
 import { A } from "@solidjs/router";
-import { appService } from "../lib/services/app-service";
+import { useApp } from "../lib/context/AppContext";
 
 export default function Home() {
-  const [isLoading, setIsLoading] = createSignal(true);
-  const [hasUser, setHasUser] = createSignal(false);
-
-  onMount(async () => {
-    try {
-      await appService.initialize();
-      
-      // Check both IndexedDB and localStorage for backward compatibility
-      if (appService.hasUser() || localStorage.getItem("birthDate")) {
-        setHasUser(true);
-      }
-    } catch (error) {
-      console.error("Failed to initialize:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  });
+  const app = useApp();
 
   return (
     <main class="container">
-      <Show when={!isLoading()} fallback={<div class="loading">Loading...</div>}>
+      <Show when={!app.isLoading()} fallback={<div class="loading">Loading...</div>}>
         <div class="hero">
           <h1>MyLife Calendar</h1>
           <p class="tagline">Track your life journey, one week at a time</p>
           
           <Show 
-            when={!hasUser()}
+            when={!app.user()}
             fallback={
-              <div class="dashboard-preview">
-                <h2>Your Life Journey</h2>
-                <p>Welcome back! Please unlock your calendar to continue.</p>
-                <div class="home-nav">
-                  <A href="/login" class="btn-primary">Unlock Calendar</A>
-                  <A href="/period" class="btn-secondary">88-Day Tracker</A>
+              <Show
+                when={app.isAuthenticated()}
+                fallback={
+                  <div class="dashboard-preview">
+                    <h2>Your Life Journey</h2>
+                    <p>Welcome back! Please unlock your calendar to continue.</p>
+                    <div class="home-nav">
+                      <A href="/login" class="btn-primary">Unlock Calendar</A>
+                    </div>
+                  </div>
+                }
+              >
+                <div class="dashboard-preview">
+                  <h2>Your Life Journey</h2>
+                  <p>Welcome back! Your life calendar is ready.</p>
+                  <div class="home-nav">
+                    <A href="/period" class="btn-primary">88-Day Tracker</A>
+                    <A href="/life" class="btn-secondary">Life Calendar</A>
+                  </div>
                 </div>
-              </div>
+              </Show>
             }
           >
             <div class="setup-prompt">

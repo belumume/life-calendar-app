@@ -1,12 +1,26 @@
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, For, Show, createEffect } from "solid-js";
 import { Title } from "@solidjs/meta";
-import { A } from "@solidjs/router";
+import { A, useNavigate } from "@solidjs/router";
+import { useApp } from "../../lib/context/AppContext";
 
 export default function LifeView() {
-  const [birthDate] = createSignal(typeof window !== "undefined" ? localStorage.getItem("birthDate") || "" : "");
+  const app = useApp();
+  const navigate = useNavigate();
+  
   const weeksInYear = 52;
   const yearsToShow = 90; // Show 90 years
+  
+  // Redirect if not authenticated
+  createEffect(() => {
+    if (!app.isLoading() && !app.user()) {
+      navigate("/");
+    } else if (!app.isLoading() && app.user() && !app.isAuthenticated()) {
+      navigate("/login");
+    }
+  });
 
+  const birthDate = () => app.user()?.birthDate || "";
+  
   const calculateAge = () => {
     if (!birthDate()) return 0;
     const birth = new Date(birthDate());
@@ -33,7 +47,7 @@ export default function LifeView() {
         <A href="/" class="back-link">←</A>
         <h1>Your Life in Weeks</h1>
         <div class="header-actions">
-          <button class="icon-btn">⚙️</button>
+          <A href="/settings" class="icon-link" title="Settings">⚙️</A>
         </div>
       </header>
 

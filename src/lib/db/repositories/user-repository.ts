@@ -1,18 +1,22 @@
 import { browserDB } from '../browser-db';
 import type { User } from '../../validation/schemas';
-import { createUserSchema } from '../../validation/schemas';
+import { UserSchema } from '../../validation/schemas';
+import { BirthDateSchema } from '../../validation/input-schemas';
 
 export class UserRepository {
   async createUser(data: { birthDate: string; passphrase: string }): Promise<User> {
+    // Validate birth date first
+    const validatedBirthDate = BirthDateSchema.parse(data.birthDate);
+    
     const user: User = {
       id: crypto.randomUUID(),
-      birthDate: data.birthDate,
+      birthDate: validatedBirthDate,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
-    // Validate before saving
-    const validated = createUserSchema.parse(user);
+    // Validate complete user object before saving
+    const validated = UserSchema.parse(user);
     await browserDB.saveUser(validated);
     
     return validated;
