@@ -12,9 +12,15 @@ interface AppDB {
     value: {
       id: string;
       userId: string;
+      periodId?: string;
       date: string;
       dayNumber: number;
       content: string;
+      iv?: string;
+      mood?: string;
+      tags?: string[];
+      achievements?: string[];
+      gratitude?: string[];
       encrypted?: boolean;
       createdAt: string;
       updatedAt: string;
@@ -92,6 +98,44 @@ class BrowserDatabase {
       createdAt: e.createdAt,
       updatedAt: e.updatedAt,
     } as JournalEntry));
+  }
+
+  async getEntriesPaginated(
+    userId: string,
+    page: number = 1,
+    pageSize: number = 10
+  ): Promise<{ entries: JournalEntry[]; total: number; hasMore: boolean }> {
+    if (!this.db) await this.init();
+    
+    // Get all entries for the user (sorted by date descending)
+    const allEntries = await this.db!.getAllFromIndex('entries', 'by-user', userId);
+    allEntries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    const total = allEntries.length;
+    const start = (page - 1) * pageSize;
+    const end = start + pageSize;
+    
+    const entries = allEntries.slice(start, end).map(e => ({
+      id: e.id,
+      userId: e.userId,
+      periodId: e.periodId,
+      date: e.date,
+      dayNumber: e.dayNumber,
+      content: e.content,
+      iv: e.iv,
+      mood: e.mood,
+      tags: e.tags || [],
+      achievements: e.achievements || [],
+      gratitude: e.gratitude || [],
+      createdAt: e.createdAt,
+      updatedAt: e.updatedAt,
+    } as JournalEntry));
+    
+    return {
+      entries,
+      total,
+      hasMore: end < total
+    };
   }
 
   async saveEntry(entry: any): Promise<void> {

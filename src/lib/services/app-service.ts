@@ -211,6 +211,54 @@ export class AppService {
     this.currentUser = null;
     encryptionService.clear();
   }
+
+  async getJournalEntriesPaginated(
+    page: number = 1,
+    pageSize: number = 10
+  ): Promise<{ entries: JournalEntry[]; total: number; hasMore: boolean; page: number; pageSize: number }> {
+    if (!this.currentUser) {
+      throw new AppServiceError('No user logged in', 'NOT_AUTHENTICATED');
+    }
+    
+    try {
+      const result = await journalRepository.getEntriesPaginated(this.currentUser.id, page, pageSize);
+      
+      if (!encryptionService.isInitialized()) {
+        // Return entries without decryption if encryption is not initialized
+        return {
+          ...result,
+          entries: result.entries.map(entry => ({ ...entry, content: '[Please log in to view]' }))
+        };
+      }
+      
+      // Decrypt entries
+      const decryptedEntries = await Promise.all(
+        result.entries.map(async (entry) => {
+          if (entry.content && entry.iv) {
+            try {
+              const decryptedContent = await encryptionService.decrypt({
+                encrypted: entry.content,
+                iv: entry.iv,
+              });
+              return { ...entry, content: decryptedContent };
+            } catch (error) {
+              console.error('Failed to decrypt entry:', error);
+              return { ...entry, content: '[Failed to decrypt]' };
+            }
+          }
+          return entry;
+        })
+      );
+      
+      return {
+        ...result,
+        entries: decryptedEntries
+      };
+    } catch (error) {
+      console.error('Failed to get journal entries:', error);
+      throw new AppServiceError('Failed to load journal entries', 'LOAD_ENTRIES_ERROR');
+    }
+  }
 }
 
 export const appService = new AppService();
