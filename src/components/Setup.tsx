@@ -1,6 +1,5 @@
 import { createSignal, Show } from "solid-js";
 import { useNavigate } from "@solidjs/router";
-import { initializeUser } from "../lib/state/store";
 
 export default function Setup() {
   const [birthDate, setBirthDate] = createSignal("");
@@ -52,14 +51,19 @@ export default function Setup() {
         return;
       }
 
-      // Initialize user with encryption
-      const success = await initializeUser(birthDate(), passphrase());
+      // For now, just save to localStorage
+      const userData = {
+        id: crypto.randomUUID(),
+        birthDate: birthDate(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
       
-      if (success) {
-        navigate("/period");
-      } else {
-        setError("Failed to create account. Please try again.");
-      }
+      localStorage.setItem("birthDate", birthDate());
+      localStorage.setItem("user", JSON.stringify(userData));
+      localStorage.setItem("passphrase", passphrase()); // Note: This is NOT secure, just for testing
+      
+      navigate("/period");
     } catch (err) {
       console.error("Setup error:", err);
       setError("Something went wrong. Please try again.");

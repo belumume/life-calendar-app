@@ -1,61 +1,43 @@
 import { createSignal, onMount, Show } from "solid-js";
-import { Title } from "@solidjs/meta";
-import { useNavigate } from "@solidjs/router";
-import { appState, checkUserExists, initializeApp } from "../lib/state/store";
+import { A } from "@solidjs/router";
 
 export default function Home() {
   const [isLoading, setIsLoading] = createSignal(true);
-  const navigate = useNavigate();
+  const [hasUser, setHasUser] = createSignal(false);
 
-  onMount(async () => {
-    // Initialize app and check for existing user
-    await initializeApp();
-    setIsLoading(false);
-    
-    // If user exists but not authenticated, redirect to login
-    if (appState.user && !appState.isAuthenticated) {
-      // TODO: Create login page
+  onMount(() => {
+    // Simple check for existing user
+    const userData = localStorage.getItem("birthDate");
+    if (userData) {
+      setHasUser(true);
     }
+    setIsLoading(false);
   });
 
   return (
     <main class="container">
-      <Title>MyLife Calendar - Track Your Life Journey</Title>
-      
       <Show when={!isLoading()} fallback={<div class="loading">Loading...</div>}>
         <div class="hero">
           <h1>MyLife Calendar</h1>
           <p class="tagline">Track your life journey, one week at a time</p>
           
           <Show 
-            when={!appState.user}
+            when={!hasUser()}
             fallback={
               <div class="dashboard-preview">
                 <h2>Your Life Journey</h2>
-                <Show 
-                  when={appState.isAuthenticated}
-                  fallback={
-                    <div>
-                      <p>Please enter your passphrase to unlock your calendar.</p>
-                      <button class="btn-primary" onClick={() => navigate("/login")}>
-                        Unlock Calendar
-                      </button>
-                    </div>
-                  }
-                >
-                  <p>Welcome back! Your life calendar is ready.</p>
-                  <div class="home-nav">
-                    <a href="/period" class="btn-primary">88-Day Tracker</a>
-                    <a href="/life" class="btn-secondary">Life Calendar</a>
-                  </div>
-                </Show>
+                <p>Welcome back! Your life calendar is ready.</p>
+                <div class="home-nav">
+                  <A href="/period" class="btn-primary">88-Day Tracker</A>
+                  <A href="/life" class="btn-secondary">Life Calendar</A>
+                </div>
               </div>
             }
           >
             <div class="setup-prompt">
               <h2>Welcome to Your Life Calendar</h2>
               <p>A private, local-first app to visualize your entire life and track what matters most.</p>
-              <a href="/setup" class="btn-primary">Get Started</a>
+              <A href="/setup" class="btn-primary">Get Started</A>
             </div>
           </Show>
         </div>
@@ -69,10 +51,6 @@ export default function Home() {
             <li>✓ Export your data anytime</li>
           </ul>
         </section>
-        
-        <Show when={appState.error}>
-          <p class="error-message">{appState.error}</p>
-        </Show>
       </Show>
     </main>
   );
