@@ -113,6 +113,11 @@ h1 {
   border-bottom: 1px solid var(--color-border);
 }
 
+.header-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
 .back-link, .icon-link {
   text-decoration: none;
   color: var(--color-text);
@@ -581,6 +586,34 @@ h1 {
   margin-top: 0.5rem;
 }
 
+/* Password strength indicator */
+.password-strength {
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.strength-bar-container {
+  flex: 1;
+  height: 4px;
+  background-color: #e0e0e0;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.strength-bar-fill {
+  height: 100%;
+  transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.strength-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  min-width: 80px;
+  text-align: right;
+}
+
 .setup-form input[type="password"],
 .setup-form input[type="text"] {
   width: 100%;
@@ -676,6 +709,110 @@ h1 {
   gap: 1rem;
   justify-content: center;
   margin-top: 2rem;
+}
+
+/* Settings page */
+.settings-container {
+  max-width: 600px;
+  margin: 2rem auto;
+  padding: 2rem;
+}
+
+.settings-section {
+  margin-bottom: 3rem;
+  padding: 2rem;
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.settings-section h2 {
+  margin-bottom: 1rem;
+  color: var(--color-primary);
+}
+
+.section-description {
+  color: var(--color-text-secondary);
+  margin-bottom: 1.5rem;
+}
+
+.info-item {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.info-item:last-child {
+  border-bottom: none;
+}
+
+.export-buttons {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.export-info {
+  margin-top: 2rem;
+  padding: 1rem;
+  background-color: var(--color-background-secondary);
+  border-radius: var(--radius);
+}
+
+.export-info h3 {
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.export-info ul {
+  margin-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.success-message {
+  color: #0a0;
+  padding: 0.75rem;
+  background-color: #efe;
+  border-radius: var(--radius);
+  margin: 1rem 0;
+}
+
+.danger-zone {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  border: 2px solid #d00;
+  border-radius: var(--radius);
+  background-color: #fee;
+}
+
+.danger-zone h3 {
+  color: #d00;
+  margin-bottom: 0.5rem;
+}
+
+.warning-text {
+  color: #d00;
+  margin-bottom: 1rem;
+}
+
+.btn-danger {
+  background-color: #d00;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.2s;
+}
+
+.btn-danger:hover {
+  background-color: #b00;
+}
+
+.btn-danger:disabled {
+  background-color: #999;
+  cursor: not-allowed;
 }
 
 /* Recent entries */

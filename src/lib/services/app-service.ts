@@ -14,6 +14,7 @@ export class AppServiceError extends Error {
 export class AppService {
   private currentUser: User | null = null;
   private isInitialized = false;
+  private authenticated = false;
 
   async initialize(): Promise<void> {
     if (this.isInitialized) return;
@@ -59,6 +60,9 @@ export class AppService {
         updatedAt: new Date().toISOString(),
       });
       
+      // Mark as authenticated after account creation
+      this.authenticated = true;
+      
       return updatedUser;
     } catch (error) {
       console.error('Failed to create account:', error);
@@ -85,9 +89,13 @@ export class AppService {
           iv: entries[0].iv
         });
       }
+      
+      // Mark as authenticated on successful login
+      this.authenticated = true;
       return true;
     } catch (error) {
       console.error('Login failed:', error);
+      this.authenticated = false;
       return false;
     }
   }
@@ -182,8 +190,13 @@ export class AppService {
   }
 
   async logout(): Promise<void> {
-    this.currentUser = null;
+    this.authenticated = false;
     encryptionService.clear();
+    // Keep currentUser for login page
+  }
+
+  isAuthenticated(): boolean {
+    return this.authenticated && encryptionService.isInitialized();
   }
 
   async clearAllData(): Promise<void> {

@@ -1,29 +1,24 @@
-import { createSignal, Show, onMount } from "solid-js";
+import { createSignal, Show, createEffect } from "solid-js";
 import { A, useNavigate } from "@solidjs/router";
-import { appService } from "../lib/services/app-service";
+import { useApp } from "../lib/context/AppContext";
 
 export default function Login() {
+  const app = useApp();
+  const navigate = useNavigate();
+  
   const [passphrase, setPassphrase] = createSignal("");
   const [showPassphrase, setShowPassphrase] = createSignal(false);
   const [error, setError] = createSignal("");
-  const [isLoading, setIsLoading] = createSignal(true);
   const [isSubmitting, setIsSubmitting] = createSignal(false);
-  const navigate = useNavigate();
-
-  onMount(async () => {
-    try {
-      await appService.initialize();
-      
-      // If no user exists, redirect to setup
-      if (!appService.hasUser()) {
+  
+  // Redirect based on auth state
+  createEffect(() => {
+    if (!app.isLoading()) {
+      if (!app.user()) {
         navigate("/setup");
-        return;
+      } else if (app.isAuthenticated()) {
+        navigate("/period");
       }
-    } catch (err) {
-      console.error("Failed to initialize:", err);
-      setError("Failed to load. Please refresh and try again.");
-    } finally {
-      setIsLoading(false);
     }
   });
 
@@ -38,7 +33,7 @@ export default function Login() {
         return;
       }
 
-      const success = await appService.login(passphrase());
+      const success = await app.login(passphrase());
       
       if (success) {
         navigate("/period");
@@ -56,7 +51,7 @@ export default function Login() {
 
   return (
     <main class="container">
-      <Show when={!isLoading()} fallback={<div class="loading">Loading...</div>}>
+      <Show when={!app.isLoading()} fallback={<div class="loading">Loading...</div>}>
         <div class="login-container">
           <h1>Welcome Back</h1>
           <p>Enter your passphrase to unlock your life calendar.</p>

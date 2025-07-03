@@ -1,10 +1,15 @@
-import { createSignal, For, Show, onMount, createMemo } from "solid-js";
+import { createSignal, For, Show, onMount, createMemo, createEffect } from "solid-js";
 import { A, useNavigate } from "@solidjs/router";
 import { appService } from "../../lib/services/app-service";
 import type { JournalEntry } from "../../lib/validation/schemas";
+import { JournalContentSchema, sanitizeForDisplay } from "../../lib/validation/input-schemas";
+import { z } from "zod";
+import { useApp } from "../../lib/context/AppContext";
 
 export default function PeriodView() {
   const navigate = useNavigate();
+  const app = useApp();
+  
   const [dailyNote, setDailyNote] = createSignal("");
   const [entries, setEntries] = createSignal<JournalEntry[]>([]);
   const [currentPeriod, setCurrentPeriod] = createSignal<any>(null);
@@ -12,15 +17,20 @@ export default function PeriodView() {
   const [isSubmitting, setIsSubmitting] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   
-  // Check if user exists and load data
+  // Redirect if not authenticated
+  createEffect(() => {
+    if (!app.isLoading() && !app.user()) {
+      navigate("/");
+    } else if (!app.isLoading() && app.user() && !app.isAuthenticated()) {
+      navigate("/login");
+    }
+  });
+  
+  // Load data when authenticated
   onMount(async () => {
+    if (!app.isAuthenticated()) return;
+    
     try {
-      await appService.initialize();
-      
-      if (!appService.hasUser()) {
-        navigate("/");
-        return;
-      }
       
       // Load current period and entries
       const period = await appService.getCurrentPeriod();
@@ -64,12 +74,21 @@ export default function PeriodView() {
     setIsSubmitting(true);
     setError(null);
     try {
-      const entry = await appService.addJournalEntry(dailyNote(), currentDay());
+      // Validate journal content
+      const validatedContent = JournalContentSchema.parse(dailyNote());
+      
+      const entry = await appService.addJournalEntry(validatedContent, currentDay());
       setEntries([...entries(), entry]);
       setDailyNote("");
     } catch (err) {
       console.error("Failed to add note:", err);
-      setError(err instanceof Error ? err.message : "Failed to save entry");
+      if (err instanceof z.ZodError) {
+        setError(err.errors[0].message);
+      } else if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Failed to save entry");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -81,7 +100,10 @@ export default function PeriodView() {
         <header class="view-header">
           <A href="/" class="back-link">← Back</A>
           <h1>{currentPeriod()?.name || "88 Days of Summer"}</h1>
-          <A href="/life" class="icon-link">📅</A>
+          <div class="header-actions">
+            <A href="/life" class="icon-link" title="Life Calendar">📅</A>
+            <A href="/settings" class="icon-link" title="Settings">⚙️</A>
+          </div>
         </header>
 
       <div class="progress-section">
@@ -144,7 +166,7 @@ export default function PeriodView() {
           <For each={entries().slice(-5).reverse()}>
             {(entry) => (
               <div class="entry">
-                <strong>Day {entry.dayNumber}:</strong> {entry.content}
+                <strong>Day {entry.dayNumber}:</strong> {sanitizeForDisplay(entry.content)}
               </div>
             )}
           </For>

@@ -1,6 +1,9 @@
 import { createSignal, Show } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { appService } from "../lib/services/app-service";
+import { SetupFormSchema } from "../lib/validation/input-schemas";
+import { z } from "zod";
+import PasswordStrength from "./PasswordStrength";
 
 export default function Setup() {
   const [birthDate, setBirthDate] = createSignal("");
@@ -17,52 +20,30 @@ export default function Setup() {
     setIsSubmitting(true);
 
     try {
-      // Validate birth date
-      if (!birthDate()) {
-        setError("Please enter your birth date");
-        return;
-      }
-      
-      const birth = new Date(birthDate());
-      const now = new Date();
-      
-      if (birth > now) {
-        setError("Birth date cannot be in the future");
-        return;
-      }
-      
-      if (birth.getFullYear() < 1900) {
-        setError("Please enter a valid birth date");
-        return;
-      }
+      // Validate form data with Zod
+      const formData = {
+        birthDate: birthDate(),
+        passphrase: passphrase(),
+        confirmPassphrase: confirmPassphrase(),
+      };
 
-      // Validate passphrase
-      if (!passphrase()) {
-        setError("Please enter a passphrase");
-        return;
-      }
+      const validatedData = SetupFormSchema.parse(formData);
 
-      if (passphrase().length < 8) {
-        setError("Passphrase must be at least 8 characters long");
-        return;
-      }
-
-      if (passphrase() !== confirmPassphrase()) {
-        setError("Passphrases do not match");
-        return;
-      }
-
-      // Create account using IndexedDB service
-      await appService.createAccount(birthDate(), passphrase());
+      // Create account using IndexedDB service with validated data
+      await appService.createAccount(validatedData.birthDate, validatedData.passphrase);
       
-      // Keep localStorage for backward compatibility temporarily
-      localStorage.setItem("birthDate", birthDate());
-      localStorage.setItem("user", JSON.stringify({ birthDate: birthDate() }));
-      
+      // Navigate to period view
       navigate("/period");
     } catch (err) {
       console.error("Setup error:", err);
-      setError("Something went wrong. Please try again.");
+      if (err instanceof z.ZodError) {
+        // Show the first validation error
+        setError(err.errors[0].message);
+      } else if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Something went wrong. Please try again.");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -113,7 +94,10 @@ export default function Setup() {
               {showPassphrase() ? "🙈" : "👁️"}
             </button>
           </div>
-          <p class="field-hint">Minimum 8 characters. Choose something memorable but secure.</p>
+          <p class="field-hint">Minimum 8 characters, must include uppercase, lowercase, and numbers.</p>
+          <Show when={passphrase()}>
+            <PasswordStrength password={passphrase()} />
+          </Show>
         </div>
 
         <div class="form-group">
