@@ -51,6 +51,19 @@ export class JournalRepository {
     // For now, we'd need to implement this in browser-db.ts
     console.warn('Delete not implemented yet');
   }
+
+  async getEntriesPaginated(
+    userId: string,
+    page: number = 1,
+    pageSize: number = 10
+  ): Promise<{ entries: JournalEntry[]; total: number; hasMore: boolean; page: number; pageSize: number }> {
+    const result = await browserDB.getEntriesPaginated(userId, page, pageSize);
+    return {
+      ...result,
+      page,
+      pageSize
+    };
+  }
 }
 
 export const journalRepository = new JournalRepository();

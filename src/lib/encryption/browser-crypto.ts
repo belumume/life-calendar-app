@@ -10,7 +10,17 @@ class BrowserEncryptionService {
   async initialize(passphrase: string, existingSalt?: string): Promise<string> {
     // Use existing salt or generate new one
     if (existingSalt) {
-      this.salt = Uint8Array.from(atob(existingSalt), c => c.charCodeAt(0));
+      // Handle base64 salt more safely
+      try {
+        const binaryString = atob(existingSalt);
+        this.salt = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          this.salt[i] = binaryString.charCodeAt(i);
+        }
+      } catch (e) {
+        // If not valid base64, treat as raw string
+        this.salt = new TextEncoder().encode(existingSalt);
+      }
     } else {
       this.salt = crypto.getRandomValues(new Uint8Array(16));
     }
@@ -39,12 +49,14 @@ class BrowserEncryptionService {
     );
     
     // Return salt as base64 for storage
-    return btoa(String.fromCharCode(...this.salt));
+    // Convert to array for safer base64 encoding
+    const saltArray = Array.from(this.salt);
+    return btoa(saltArray.map(b => String.fromCharCode(b)).join(''));
   }
 
   async encrypt(data: string): Promise<EncryptedData> {
     if (!this.key) {
-      throw new Error('Encryption not initialized');
+      throw new Error('Encryption service not initialized');
     }
 
     const encoder = new TextEncoder();
@@ -60,20 +72,35 @@ class BrowserEncryptionService {
       encoder.encode(data)
     );
 
+    // Convert to array for safer base64 encoding
+    const encryptedArray = Array.from(new Uint8Array(encrypted));
+    const ivArray = Array.from(iv);
+    
     return {
-      encrypted: btoa(String.fromCharCode(...new Uint8Array(encrypted))),
-      iv: btoa(String.fromCharCode(...iv))
+      encrypted: btoa(encryptedArray.map(b => String.fromCharCode(b)).join('')),
+      iv: btoa(ivArray.map(b => String.fromCharCode(b)).join(''))
     };
   }
 
   async decrypt(data: EncryptedData): Promise<string> {
     if (!this.key) {
-      throw new Error('Encryption not initialized');
+      throw new Error('Encryption service not initialized');
     }
 
     const decoder = new TextDecoder();
-    const encrypted = Uint8Array.from(atob(data.encrypted), c => c.charCodeAt(0));
-    const iv = Uint8Array.from(atob(data.iv), c => c.charCodeAt(0));
+    
+    // Safer base64 decoding
+    const encryptedBinary = atob(data.encrypted);
+    const encrypted = new Uint8Array(encryptedBinary.length);
+    for (let i = 0; i < encryptedBinary.length; i++) {
+      encrypted[i] = encryptedBinary.charCodeAt(i);
+    }
+    
+    const ivBinary = atob(data.iv);
+    const iv = new Uint8Array(ivBinary.length);
+    for (let i = 0; i < ivBinary.length; i++) {
+      iv[i] = ivBinary.charCodeAt(i);
+    }
 
     const decrypted = await crypto.subtle.decrypt(
       {

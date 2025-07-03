@@ -107,6 +107,7 @@ export default function PeriodView() {
           <A href="/" class="back-link">← Back</A>
           <h1>{currentPeriod()?.name || "88 Days of Summer"}</h1>
           <div class="header-actions">
+            <A href="/journal" class="icon-link" title="All Entries">📖</A>
             <A href="/life" class="icon-link" title="Life Calendar">📅</A>
             <A href="/settings" class="icon-link" title="Settings">⚙️</A>
           </div>
@@ -171,7 +172,12 @@ export default function PeriodView() {
 
       <Show when={entries().length > 0}>
         <div class="recent-entries">
-          <h3>Recent Entries</h3>
+          <div style={{ display: "flex", "justify-content": "space-between", "align-items": "center", "margin-bottom": "1rem" }}>
+            <h3>Recent Entries</h3>
+            <A href="/journal" class="btn-secondary" style={{ "font-size": "0.875rem", padding: "0.5rem 1rem" }}>
+              View All ({entries().length})
+            </A>
+          </div>
           <For each={entries().slice(-5).reverse()}>
             {(entry) => (
               <JournalEntryDisplay 
