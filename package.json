@@ -18,8 +18,13 @@
     "@solidjs/meta": "^0.29.4",
     "@solidjs/router": "^0.14.10",
     "@solidjs/start": "^1.1.5",
+    "@types/better-sqlite3": "^7.6.13",
+    "better-sqlite3": "^12.2.0",
+    "joi": "^17.13.3",
     "solid-js": "^1.9.3",
-    "vinxi": "^0.5.7"
+    "vinxi": "^0.5.7",
+    "workbox-window": "^7.3.0",
+    "zod": "^3.25.71"
   },
   "devDependencies": {
     "@playwright/test": "^1.48.2",

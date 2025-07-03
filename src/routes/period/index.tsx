@@ -1,14 +1,33 @@
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, For, Show, onMount, createMemo } from "solid-js";
 import { Title } from "@solidjs/meta";
-import { A } from "@solidjs/router";
+import { A, useNavigate } from "@solidjs/router";
+import { appState, addJournalEntry } from "../../lib/state/store";
 
 export default function PeriodView() {
-  const totalDays = 88;
-  const [currentDay] = createSignal(15); // Example: Day 15
+  const navigate = useNavigate();
   const [dailyNote, setDailyNote] = createSignal("");
+  const [isSubmitting, setIsSubmitting] = createSignal(false);
+  
+  // Redirect if not authenticated
+  onMount(() => {
+    if (!appState.isAuthenticated || !appState.user) {
+      navigate("/");
+    }
+  });
 
-  const progress = () => (currentDay() / totalDays) * 100;
-  const weeksCount = Math.ceil(totalDays / 7);
+  // Calculate current day based on period start date
+  const currentDay = createMemo(() => {
+    if (!appState.currentPeriod) return 0;
+    const start = new Date(appState.currentPeriod.startDate);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - start.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return Math.min(diffDays, appState.currentPeriod.totalDays || 88);
+  });
+
+  const totalDays = () => appState.currentPeriod?.totalDays || 88;
+  const progress = () => (currentDay() / totalDays()) * 100;
+  const weeksCount = Math.ceil(totalDays() / 7);
 
   const getDayStatus = (day: number) => {
     if (day < currentDay()) return "completed";
@@ -16,96 +35,123 @@ export default function PeriodView() {
     return "future";
   };
 
-  const recentEntries = [
-    { day: 14, text: "Completed project milestone ✨" },
-    { day: 13, text: "Deep work session - 4 hours" },
-    { day: 12, text: "Started new learning track" },
-  ];
+  // Get recent journal entries
+  const recentEntries = createMemo(() => {
+    return appState.journalEntries
+      .filter(entry => entry.periodId === appState.currentPeriod?.id)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 5);
+  });
+
+  const handleAddNote = async () => {
+    if (!dailyNote().trim() || isSubmitting()) return;
+    
+    setIsSubmitting(true);
+    try {
+      await addJournalEntry({
+        date: new Date().toISOString(),
+        dayNumber: currentDay(),
+        periodId: appState.currentPeriod?.id,
+        content: dailyNote(),
+        mood: undefined,
+        tags: [],
+        achievements: [],
+        gratitude: [],
+      });
+      
+      setDailyNote("");
+    } catch (error) {
+      console.error("Failed to add note:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <main class="period-view">
       <Title>88 Days of Summer - MyLife Calendar</Title>
       
-      <header class="view-header">
-        <A href="/life" class="back-link">←</A>
-        <h1>88 Days of Summer 2025</h1>
-        <A href="/calendar" class="icon-link">📅</A>
-      </header>
+      <Show when={appState.isAuthenticated} fallback={<div class="loading">Loading...</div>}>
+        <header class="view-header">
+          <A href="/" class="back-link">← Back</A>
+          <h1>{appState.currentPeriod?.name || "88 Days of Summer"}</h1>
+          <A href="/life" class="icon-link">📅</A>
+        </header>
 
-      <div class="progress-section">
-        <p class="progress-text">Progress: Day {currentDay()} of {totalDays} ({progress().toFixed(0)}%)</p>
-        <div class="progress-bar">
-          <div class="progress-fill" style={{ width: `${progress()}%` }}></div>
+        <div class="progress-section">
+          <p class="progress-text">
+            Progress: Day {currentDay()} of {totalDays()} ({progress().toFixed(0)}%)
+          </p>
+          <div class="progress-bar">
+            <div class="progress-fill" style={{ width: `${progress()}%` }}></div>
+          </div>
         </div>
-      </div>
 
-      <div class="weeks-grid-container">
-        <For each={Array(weeksCount)}>
-          {(_, weekIndex) => (
-            <div class="week-block">
-              <h3>Week {weekIndex() + 1}</h3>
-              <div class="days-grid">
-                <For each={Array(7)}>
-                  {(_, dayIndex) => {
-                    const dayNumber = weekIndex() * 7 + dayIndex() + 1;
-                    if (dayNumber > totalDays) return null;
-                    
-                    const status = getDayStatus(dayNumber);
-                    return (
-                      <A 
-                        href={`/day/${dayNumber}`}
-                        class="day-cell"
-                        classList={{
-                          completed: status === "completed",
-                          current: status === "current",
-                          future: status === "future"
-                        }}
-                      >
-                        <Show when={status === "completed"}>✓</Show>
-                        <Show when={status === "current"}>●</Show>
-                        <Show when={status === "future"}>{dayNumber}</Show>
-                      </A>
-                    );
-                  }}
-                </For>
-              </div>
-            </div>
-          )}
-        </For>
-      </div>
-
-      <div class="daily-achievement">
-        <h3>Daily Achievements</h3>
-        <div class="note-input">
+        <div class="daily-input">
+          <h3>How was today?</h3>
           <textarea
-            placeholder="Today: Made substantial progress on..."
+            placeholder="What did you accomplish? What are you grateful for?"
             value={dailyNote()}
             onInput={(e) => setDailyNote(e.currentTarget.value)}
+            rows={3}
           />
-          <button class="btn-primary">Add Note</button>
+          <button 
+            class="btn-primary"
+            onClick={handleAddNote}
+            disabled={isSubmitting() || !dailyNote().trim()}
+          >
+            {isSubmitting() ? "Saving..." : "Save Today's Entry"}
+          </button>
         </div>
-      </div>
 
-      <div class="recent-entries">
-        <h3>Recent Entries</h3>
-        <ul>
-          <For each={recentEntries}>
-            {(entry) => (
-              <li>
-                <A href={`/day/${entry.day}`}>
-                  Day {entry.day}: {entry.text}
-                </A>
-              </li>
+        <div class="weeks-grid-container">
+          <For each={Array(weeksCount).fill(0)}>
+            {(_, weekIndex) => (
+              <div class="week-block">
+                <h3>Week {weekIndex() + 1}</h3>
+                <div class="days-grid">
+                  <For each={Array(7).fill(0)}>
+                    {(_, dayIndex) => {
+                      const dayNumber = weekIndex() * 7 + dayIndex() + 1;
+                      if (dayNumber <= totalDays()) {
+                        return (
+                          <A
+                            href={`/day/${dayNumber}`}
+                            class={`day-cell ${getDayStatus(dayNumber)}`}
+                          >
+                            {dayNumber}
+                          </A>
+                        );
+                      }
+                      return <div class="day-cell empty"></div>;
+                    }}
+                  </For>
+                </div>
+              </div>
             )}
           </For>
-        </ul>
-      </div>
+        </div>
 
-      <nav class="view-actions">
-        <button class="btn-secondary">View All Days</button>
-        <button class="btn-secondary">Statistics</button>
-        <button class="btn-secondary">Export</button>
-      </nav>
+        <Show when={recentEntries().length > 0}>
+          <div class="recent-entries">
+            <h3>Recent Entries</h3>
+            <For each={recentEntries()}>
+              {(entry) => (
+                <div class="entry">
+                  <strong>Day {entry.dayNumber}:</strong> {entry.content}
+                  <Show when={entry.mood}>
+                    <span class="mood-badge">{entry.mood}</span>
+                  </Show>
+                </div>
+              )}
+            </For>
+          </div>
+        </Show>
+
+        <Show when={appState.error}>
+          <p class="error-message">{appState.error}</p>
+        </Show>
+      </Show>
     </main>
   );
 }
