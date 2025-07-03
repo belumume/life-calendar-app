@@ -1,16 +1,20 @@
-import { createSignal, onMount } from "solid-js";
+import { createSignal, onMount, Show } from "solid-js";
 import { Title } from "@solidjs/meta";
+import { useNavigate } from "@solidjs/router";
+import { appState, checkUserExists, initializeApp } from "../lib/state/store";
 
 export default function Home() {
-  const [hasStarted, setHasStarted] = createSignal(false);
+  const [isLoading, setIsLoading] = createSignal(true);
+  const navigate = useNavigate();
 
-  onMount(() => {
-    // Check if user has already set up their calendar
-    if (typeof window !== "undefined") {
-      const birthDate = localStorage.getItem("birthDate");
-      if (birthDate) {
-        setHasStarted(true);
-      }
+  onMount(async () => {
+    // Initialize app and check for existing user
+    await initializeApp();
+    setIsLoading(false);
+    
+    // If user exists but not authenticated, redirect to login
+    if (appState.user && !appState.isAuthenticated) {
+      // TODO: Create login page
     }
   });
 
@@ -18,33 +22,58 @@ export default function Home() {
     <main class="container">
       <Title>MyLife Calendar - Track Your Life Journey</Title>
       
-      <div class="hero">
-        <h1>MyLife Calendar</h1>
-        <p class="tagline">Track your life journey, one week at a time</p>
+      <Show when={!isLoading()} fallback={<div class="loading">Loading...</div>}>
+        <div class="hero">
+          <h1>MyLife Calendar</h1>
+          <p class="tagline">Track your life journey, one week at a time</p>
+          
+          <Show 
+            when={!appState.user}
+            fallback={
+              <div class="dashboard-preview">
+                <h2>Your Life Journey</h2>
+                <Show 
+                  when={appState.isAuthenticated}
+                  fallback={
+                    <div>
+                      <p>Please enter your passphrase to unlock your calendar.</p>
+                      <button class="btn-primary" onClick={() => navigate("/login")}>
+                        Unlock Calendar
+                      </button>
+                    </div>
+                  }
+                >
+                  <p>Welcome back! Your life calendar is ready.</p>
+                  <div class="home-nav">
+                    <a href="/period" class="btn-primary">88-Day Tracker</a>
+                    <a href="/life" class="btn-secondary">Life Calendar</a>
+                  </div>
+                </Show>
+              </div>
+            }
+          >
+            <div class="setup-prompt">
+              <h2>Welcome to Your Life Calendar</h2>
+              <p>A private, local-first app to visualize your entire life and track what matters most.</p>
+              <a href="/setup" class="btn-primary">Get Started</a>
+            </div>
+          </Show>
+        </div>
         
-        {!hasStarted() ? (
-          <div class="setup-prompt">
-            <h2>Welcome to Your Life Calendar</h2>
-            <p>A private, local-first app to visualize your entire life and track what matters most.</p>
-            <a href="/setup" class="btn-primary">Get Started</a>
-          </div>
-        ) : (
-          <div class="dashboard-preview">
-            <p>Welcome back! Your 88-day summer tracker awaits.</p>
-            <a href="/period" class="btn-primary">Open Calendar</a>
-          </div>
-        )}
-      </div>
-      
-      <section class="features">
-        <h3>Your Data, Your Privacy</h3>
-        <ul>
-          <li>✓ All data stored locally on your device</li>
-          <li>✓ End-to-end encryption for complete privacy</li>
-          <li>✓ Works offline - no internet required</li>
-          <li>✓ Export your data anytime</li>
-        </ul>
-      </section>
+        <section class="features">
+          <h3>Your Data, Your Privacy</h3>
+          <ul>
+            <li>✓ All data encrypted locally on your device</li>
+            <li>✓ Your passphrase never leaves your device</li>
+            <li>✓ Works offline - no internet required</li>
+            <li>✓ Export your data anytime</li>
+          </ul>
+        </section>
+        
+        <Show when={appState.error}>
+          <p class="error-message">{appState.error}</p>
+        </Show>
+      </Show>
     </main>
   );
 }
