@@ -100,7 +100,14 @@ export class AppService {
     }
   }
 
-  async addJournalEntry(content: string, dayNumber: number): Promise<JournalEntry> {
+  async addJournalEntry(
+    content: string,
+    dayNumber: number,
+    mood?: string,
+    tags?: string[],
+    achievements?: string[],
+    gratitude?: string[]
+  ): Promise<JournalEntry> {
     if (!this.currentUser) {
       throw new AppServiceError('No user logged in', 'NOT_AUTHENTICATED');
     }
@@ -125,10 +132,10 @@ export class AppService {
         dayNumber,
         content: encrypted.encrypted,
         iv: encrypted.iv,
-        mood: undefined,
-        tags: [],
-        achievements: [],
-        gratitude: [],
+        mood: mood as any,
+        tags: tags || [],
+        achievements: achievements || [],
+        gratitude: gratitude || [],
       });
     } catch (error) {
       if (error instanceof AppServiceError) throw error;
