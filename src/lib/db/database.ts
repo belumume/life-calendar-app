@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
-import { readFileSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // Get the directory of the current module
 const __dirname = dirname(fileURLToPath(import.meta.url));
