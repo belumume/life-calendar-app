@@ -102,7 +102,7 @@ export class ExportService {
 
         for (const entry of sortedEntries) {
           const date = new Date(entry.date);
-          markdown += `### ${date.toLocaleDateString()} - Day ${entry.dayNumber || 'N/A'}\n\n`;
+          markdown += `### ${date.toLocaleDateString()} - Day ${entry.dayNumber ?? 'N/A'}\n\n`;
           markdown += `${entry.content}\n\n`;
           
           if (entry.mood) {
@@ -154,7 +154,9 @@ export class ExportService {
             if (goal.milestones && goal.milestones.length > 0) {
               markdown += `\n**Milestones:**\n`;
               goal.milestones.forEach(m => {
-                markdown += `- [${m.completed ? 'x' : ' '}] ${m.title}\n`;
+                if (m && m.title) {
+                  markdown += `- [${m.completed ? 'x' : ' '}] ${m.title}\n`;
+                }
               });
             }
             markdown += '\n';
@@ -186,9 +188,9 @@ export class ExportService {
           for (const habit of dailyHabits) {
             markdown += `#### ${habit.icon || '🎯'} ${habit.name}\n`;
             if (habit.description) markdown += `${habit.description}\n\n`;
-            markdown += `- Current Streak: ${habit.currentStreak} days\n`;
-            markdown += `- Longest Streak: ${habit.longestStreak} days\n`;
-            markdown += `- Total Completions: ${habit.completions.length}\n`;
+            markdown += `- Current Streak: ${habit.currentStreak ?? 0} days\n`;
+            markdown += `- Longest Streak: ${habit.longestStreak ?? 0} days\n`;
+            markdown += `- Total Completions: ${habit.completions?.length ?? 0}\n`;
             if (habit.targetCount && habit.targetCount > 1) {
               markdown += `- Target: ${habit.targetCount} times daily\n`;
             }

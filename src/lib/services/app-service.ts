@@ -19,10 +19,14 @@ export class AppServiceError extends Error {
 export class AppService {
   private currentUser: User | null = null;
   private isInitialized = false;
+  private isInitializing = false;
   private authenticated = false;
 
   async initialize(): Promise<void> {
-    if (this.isInitialized) return;
+    // Prevent multiple concurrent initializations
+    if (this.isInitialized || this.isInitializing) return;
+    
+    this.isInitializing = true;
     
     try {
       // Initialize database
@@ -38,6 +42,8 @@ export class AppService {
     } catch (error) {
       console.error('Failed to initialize app service:', error);
       throw new AppServiceError('Failed to initialize application', 'INIT_ERROR');
+    } finally {
+      this.isInitializing = false;
     }
   }
 
