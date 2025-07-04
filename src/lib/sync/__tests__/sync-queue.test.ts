@@ -1,29 +1,33 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { syncQueue } from '../sync-queue';
+import { SyncQueueService } from '../sync-queue';
 
 describe('SyncQueueService', () => {
+  let syncQueue: SyncQueueService;
+  
   beforeEach(() => {
     // Clear localStorage
     localStorage.clear();
-    
-    // Reset queue state
-    (syncQueue as any).queue = [];
-    (syncQueue as any).isSyncing = false;
-    (syncQueue as any).isOnline = true;
     
     // Mock navigator.onLine
     Object.defineProperty(navigator, 'onLine', {
       writable: true,
       value: true
     });
+    
+    // Create a fresh instance for each test
+    syncQueue = new SyncQueueService();
   });
   
   afterEach(() => {
     vi.clearAllMocks();
+    syncQueue.destroy();
   });
   
   describe('addOperation', () => {
     it('should add operation to queue', async () => {
+      // Set offline to prevent auto-sync
+      (syncQueue as any).isOnline = false;
+      
       await syncQueue.addOperation('create', 'journal', 'entry-123', {
         content: 'Test entry',
         date: '2024-01-01'
@@ -42,6 +46,9 @@ describe('SyncQueueService', () => {
     });
     
     it('should persist queue to localStorage', async () => {
+      // Set offline to prevent auto-sync
+      (syncQueue as any).isOnline = false;
+      
       const setItemSpy = vi.spyOn(localStorage, 'setItem');
       
       await syncQueue.addOperation('create', 'user', 'user-123', {
@@ -168,53 +175,69 @@ describe('SyncQueueService', () => {
       
       localStorage.setItem('sync-queue', JSON.stringify(mockData));
       
-      await syncQueue.loadQueue();
+      // Create a new instance to test loading
+      const newSyncQueue = new SyncQueueService();
+      await newSyncQueue.loadQueue();
       
-      const queue = syncQueue.getQueue();
+      const queue = newSyncQueue.getQueue();
       expect(queue).toHaveLength(1);
       expect(queue[0].entityId).toBe('entry-123');
+      
+      newSyncQueue.destroy();
     });
     
     it('should handle corrupted localStorage data', async () => {
       localStorage.setItem('sync-queue', 'invalid-json');
       
+      // Create a new instance to test loading
+      const newSyncQueue = new SyncQueueService();
+      
       // Should not throw
-      await expect(syncQueue.loadQueue()).resolves.not.toThrow();
-      expect(syncQueue.getQueue()).toHaveLength(0);
+      await expect(newSyncQueue.loadQueue()).resolves.not.toThrow();
+      expect(newSyncQueue.getQueue()).toHaveLength(0);
+      
+      newSyncQueue.destroy();
     });
   });
   
   describe('queue management', () => {
     it('should get pending count correctly', async () => {
+      // Set offline to prevent auto-sync
+      (syncQueue as any).isOnline = false;
+      
       await syncQueue.addOperation('create', 'journal', 'entry-1', {});
       await syncQueue.addOperation('create', 'journal', 'entry-2', {});
       
-      // Mark one as failed
-      const queue = syncQueue.getQueue();
-      queue[0].status = 'failed';
+      // Directly modify the internal queue
+      (syncQueue as any).queue[0].status = 'failed';
       
       expect(syncQueue.getPendingCount()).toBe(1);
     });
     
     it('should get failed count correctly', async () => {
+      // Set offline to prevent auto-sync
+      (syncQueue as any).isOnline = false;
+      
       await syncQueue.addOperation('create', 'journal', 'entry-1', {});
       await syncQueue.addOperation('create', 'journal', 'entry-2', {});
       
-      // Mark both as failed
-      const queue = syncQueue.getQueue();
-      queue[0].status = 'failed';
-      queue[1].status = 'failed';
+      // Directly modify the internal queue
+      (syncQueue as any).queue[0].status = 'failed';
+      (syncQueue as any).queue[1].status = 'failed';
       
       expect(syncQueue.getFailedCount()).toBe(2);
     });
     
     it('should clear failed operations', async () => {
+      // Set offline to prevent auto-sync
+      (syncQueue as any).isOnline = false;
+      
       await syncQueue.addOperation('create', 'journal', 'entry-1', {});
       await syncQueue.addOperation('create', 'journal', 'entry-2', {});
       
-      const queue = syncQueue.getQueue();
-      queue[0].status = 'failed';
-      queue[1].status = 'pending';
+      // Directly modify the internal queue
+      (syncQueue as any).queue[0].status = 'failed';
+      (syncQueue as any).queue[1].status = 'pending';
       
       syncQueue.clearFailedOperations();
       
@@ -223,12 +246,15 @@ describe('SyncQueueService', () => {
     });
     
     it('should retry failed operations', async () => {
+      // Set offline to prevent auto-sync
+      (syncQueue as any).isOnline = false;
+      
       await syncQueue.addOperation('create', 'journal', 'entry-1', {});
       
-      const queue = syncQueue.getQueue();
-      queue[0].status = 'failed';
-      queue[0].retryCount = 2;
-      queue[0].error = 'Previous error';
+      // Directly modify the internal queue
+      (syncQueue as any).queue[0].status = 'failed';
+      (syncQueue as any).queue[0].retryCount = 2;
+      (syncQueue as any).queue[0].error = 'Previous error';
       
       syncQueue.retryFailedOperations();
       

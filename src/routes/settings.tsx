@@ -4,6 +4,7 @@ import { appService } from "../lib/services/app-service";
 import { exportService } from "../lib/services/export-service";
 import { useApp } from "../lib/context/AppContext";
 import { syncQueue } from "../lib/sync/sync-queue";
+import ThemeSettings from "../components/ThemeSettings";
 
 export default function Settings() {
   const app = useApp();
@@ -239,6 +240,10 @@ export default function Settings() {
                 <li>Sync happens in the background</li>
               </ul>
             </div>
+          </section>
+
+          <section class="settings-section">
+            <ThemeSettings />
           </section>
 
           <section class="settings-section">

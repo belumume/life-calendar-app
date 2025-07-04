@@ -5,7 +5,7 @@ import { habitRepository } from '../db/repositories/habit-repository';
 import { browserDB } from '../db/browser-db';
 import { encryptionService } from '../encryption/browser-crypto';
 import { syncQueue } from '../sync/sync-queue';
-import type { User, JournalEntry, Goal, GoalStatus, Habit } from '../validation/schemas';
+import type { User, JournalEntry, Goal, GoalStatus, Habit, Theme } from '../validation/schemas';
 import type { GoalFormData } from '../validation/input-schemas';
 
 export class AppServiceError extends Error {
@@ -539,6 +539,24 @@ export class AppService {
     } catch (error) {
       console.error('Failed to get habits by period:', error);
       throw new AppServiceError('Failed to load habits', 'LOAD_HABITS_ERROR');
+    }
+  }
+
+  async updateUserTheme(theme: Theme): Promise<void> {
+    if (!this.currentUser) {
+      throw new AppServiceError('User not found', 'USER_NOT_FOUND');
+    }
+
+    try {
+      // Update user with new theme
+      this.currentUser = { ...this.currentUser, theme };
+      await userRepository.updateUser(this.currentUser.id, { theme });
+      
+      // Queue for sync
+      await syncQueue.addOperation('update', 'user', this.currentUser.id, { theme });
+    } catch (error) {
+      console.error('Failed to update user theme:', error);
+      throw new AppServiceError('Failed to update theme', 'UPDATE_THEME_ERROR');
     }
   }
 }
