@@ -7,6 +7,7 @@ import { useApp } from "../../lib/context/AppContext";
 import JournalEntryForm from "../../components/JournalEntryForm";
 import JournalEntryDisplay from "../../components/JournalEntryDisplay";
 import SyncStatus from "../../components/SyncStatus";
+import ThemeToggle from "../../components/ThemeToggle";
 import type { z } from "zod";
 import type { JournalEntryFormSchema } from "../../lib/validation/input-schemas";
 
@@ -109,6 +110,7 @@ export default function PeriodView() {
           <h1>{currentPeriod()?.name || "88 Days of Summer"}</h1>
           <div class="header-actions">
             <SyncStatus />
+            <ThemeToggle />
             <A href="/habits" class="icon-link" title="Habits">💪</A>
             <A href="/goals" class="icon-link" title="Goals">🎯</A>
             <A href="/journal" class="icon-link" title="All Entries">📖</A>

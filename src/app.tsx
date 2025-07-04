@@ -5,6 +5,7 @@ import { Suspense, onMount } from "solid-js";
 import { registerServiceWorker, requestPersistentStorage } from "./lib/sw/register";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { AppProvider } from "./lib/context/AppContext";
+import { themeService } from "./lib/services/theme-service";
 import "./app.css";
 
 export default function App() {
@@ -14,6 +15,8 @@ export default function App() {
       await registerServiceWorker();
       // Request persistent storage to prevent data eviction
       await requestPersistentStorage();
+      // Initialize theme service
+      await themeService.initialize();
     }
   });
 

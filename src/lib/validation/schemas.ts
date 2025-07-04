@@ -14,11 +14,22 @@ export const createGoalId = (id: string): GoalId => id as GoalId;
 export const createHabitId = (id: string): HabitId => id as HabitId;
 export const createPeriodId = (id: string): PeriodId => id as PeriodId;
 
+// Theme Schema
+export const ThemeSchema = z.object({
+  mode: z.enum(['light', 'dark', 'auto']).default('auto'),
+  primaryColor: z.string().regex(/^#[0-9A-F]{6}$/i).default('#3b82f6'),
+  accentColor: z.string().regex(/^#[0-9A-F]{6}$/i).default('#8b5cf6'),
+  fontSize: z.enum(['small', 'medium', 'large']).default('medium'),
+  fontFamily: z.enum(['system', 'serif', 'mono']).default('system'),
+  reducedMotion: z.boolean().default(false),
+});
+
 // User Schema
 export const UserSchema = z.object({
   id: z.string().uuid(),
   birthDate: z.string(), // Date string from input, not full datetime
   salt: z.string().optional(), // Base64 encoded salt for key derivation
+  theme: ThemeSchema.optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -113,6 +124,7 @@ export const EncryptedDataSchema = z.object({
 });
 
 // Type exports
+export type Theme = z.infer<typeof ThemeSchema>;
 export type User = z.infer<typeof UserSchema>;
 export type Period = z.infer<typeof PeriodSchema>;
 export type JournalEntry = z.infer<typeof JournalEntrySchema>;
