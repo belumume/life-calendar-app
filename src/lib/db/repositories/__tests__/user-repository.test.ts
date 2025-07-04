@@ -21,9 +21,13 @@ describe('UserRepository', () => {
     createdAt: '2025-01-01T00:00:00Z',
     updatedAt: '2025-01-01T00:00:00Z',
     salt: 'user-salt',
-    preferences: {
-      theme: 'light',
-      notifications: true,
+    theme: {
+      mode: 'light',
+      primaryColor: '#007bff',
+      accentColor: '#28a745',
+      fontSize: 'medium',
+      fontFamily: 'system',
+      reducedMotion: false,
     },
   };
 
@@ -90,9 +94,13 @@ describe('UserRepository', () => {
       vi.mocked(browserDB.saveUser).mockResolvedValue(undefined);
 
       const updates = {
-        preferences: {
-          theme: 'dark' as const,
-          notifications: false,
+        theme: {
+          mode: 'dark' as const,
+          primaryColor: '#000000',
+          accentColor: '#ffffff',
+          fontSize: 'large' as const,
+          fontFamily: 'mono' as const,
+          reducedMotion: true,
         },
       };
 
@@ -108,7 +116,7 @@ describe('UserRepository', () => {
         updatedAt: expect.any(String),
       });
       
-      expect(result.preferences?.theme).toBe('dark');
+      expect(result.theme?.mode).toBe('dark');
     });
 
     it('should update salt when provided', async () => {

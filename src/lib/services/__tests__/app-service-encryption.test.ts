@@ -146,9 +146,9 @@ describe('AppService Encryption Integration', () => {
       ]);
 
       await appService.initialize();
-      const success = await appService.login(wrongPassphrase);
-
-      expect(success).toBe(false);
+      
+      // Should throw an error with incorrect passphrase
+      await expect(appService.login(wrongPassphrase)).rejects.toThrow('Invalid passphrase');
       expect(appService.isAuthenticated()).toBe(false);
     });
   });

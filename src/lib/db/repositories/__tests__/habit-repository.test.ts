@@ -263,8 +263,8 @@ describe('HabitRepository', () => {
       expect(updateCall[0]).toBe(mockHabitId); // id
       expect(updateCall[1]).toBe(mockUserId); // userId
       expect(updateCall[2].completions).toHaveLength(1);
-      expect(updateCall[2].completions[0].date).toBe(completionDate);
-      expect(updateCall[2].completions[0].notes).toBe(notes);
+      expect(updateCall[2].completions?.[0]?.date).toBe(completionDate);
+      expect(updateCall[2].completions?.[0]?.notes).toBe(notes);
       // Streak calculation might return 1 for single completion
       expect(updateCall[2].currentStreak).toBeDefined();
       expect(updateCall[2].longestStreak).toBeDefined();
@@ -308,7 +308,7 @@ describe('HabitRepository', () => {
 
       const updateCall = vi.mocked(browserDB.updateHabit).mock.calls[0];
       expect(updateCall[2].completions).toHaveLength(1);
-      expect(updateCall[2].completions[0].date).toBe('2025-01-02');
+      expect(updateCall[2].completions?.[0]?.date).toBe('2025-01-02');
       expect(result).toEqual(updatedHabit);
     });
 
