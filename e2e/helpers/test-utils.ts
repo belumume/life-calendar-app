@@ -88,15 +88,53 @@ export class TestUtils {
    * Clear all application data
    */
   async clearAllData() {
-    await this.page.evaluate(() => {
-      // Clear IndexedDB
-      if ('indexedDB' in window) {
-        indexedDB.deleteDatabase('mylife-calendar-db');
-      }
-      // Clear localStorage
-      localStorage.clear();
-      // Clear sessionStorage
-      sessionStorage.clear();
-    });
+    // For Safari/WebKit, we need to handle security restrictions differently
+    try {
+      await this.page.evaluate(() => {
+        // Clear localStorage
+        localStorage.clear();
+        // Clear sessionStorage
+        sessionStorage.clear();
+        
+        // Try to clear IndexedDB
+        if ('indexedDB' in window) {
+          return new Promise<void>((resolve) => {
+            try {
+              const deleteReq = indexedDB.deleteDatabase('mylife-calendar-db');
+              deleteReq.onsuccess = () => resolve();
+              deleteReq.onerror = () => {
+                // If delete fails (e.g., Safari security), try to clear data by opening the DB
+                const openReq = indexedDB.open('mylife-calendar-db');
+                openReq.onsuccess = (event) => {
+                  const db = (event.target as IDBOpenDBRequest).result;
+                  const objectStoreNames = Array.from(db.objectStoreNames);
+                  
+                  if (objectStoreNames.length > 0) {
+                    const tx = db.transaction(objectStoreNames, 'readwrite');
+                    objectStoreNames.forEach(name => {
+                      tx.objectStore(name).clear();
+                    });
+                    tx.oncomplete = () => {
+                      db.close();
+                      resolve();
+                    };
+                  } else {
+                    db.close();
+                    resolve();
+                  }
+                };
+                openReq.onerror = () => resolve();
+              };
+            } catch (e) {
+              // If all else fails, just continue
+              resolve();
+            }
+          });
+        }
+      });
+    } catch (error) {
+      // Log but don't fail the test due to cleanup issues
+      console.warn('Failed to clear all data:', error);
+    }
   }
 }
