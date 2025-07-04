@@ -2,6 +2,7 @@ import { userRepository } from '../../db/repositories/user-repository';
 import { journalRepository } from '../../db/repositories/journal-repository';
 import { encryptionService } from '../../encryption/browser-crypto';
 import { authRateLimiter } from '../../utils/rate-limiter';
+import { addAuthenticationDelay } from '../../utils/crypto-utils';
 import type { User } from '../../validation/schemas';
 
 export class AuthServiceError extends Error {
@@ -81,6 +82,9 @@ export class AuthService {
       }
     }
     
+    let authSuccess = false;
+    let authError: Error | null = null;
+    
     try {
       // Initialize encryption with passphrase and user's salt
       await encryptionService.initialize(passphrase, this.currentUser.salt);
@@ -89,21 +93,41 @@ export class AuthService {
       const entries = await journalRepository.getEntriesByUser(this.currentUser.id);
       if (entries.length > 0 && entries[0].content && entries[0].iv) {
         // If we have encrypted entries, try to decrypt one
-        // This will throw if passphrase is wrong
-        await encryptionService.decrypt({
-          encrypted: entries[0].content,
-          iv: entries[0].iv
-        });
+        // Store result instead of throwing immediately
+        try {
+          await encryptionService.decrypt({
+            encrypted: entries[0].content,
+            iv: entries[0].iv
+          });
+          authSuccess = true;
+        } catch (decryptError) {
+          authSuccess = false;
+          authError = decryptError as Error;
+        }
+      } else {
+        // No entries to verify against, consider auth successful
+        // (This is for new users who haven't created any data yet)
+        authSuccess = true;
       }
       
-      // Mark as authenticated on successful login
-      this.authenticated = true;
+      // Add random delay to prevent timing attacks
+      await addAuthenticationDelay();
       
-      // Record successful attempt (clears rate limit)
-      await authRateLimiter.recordAttempt(userId, true);
-      
-      return true;
+      if (authSuccess) {
+        // Mark as authenticated on successful login
+        this.authenticated = true;
+        
+        // Record successful attempt (clears rate limit)
+        await authRateLimiter.recordAttempt(userId, true);
+        
+        return true;
+      } else {
+        throw authError || new Error('Authentication failed');
+      }
     } catch (error) {
+      // Add delay for failed attempts too
+      await addAuthenticationDelay();
+      
       console.error('Login failed:', error);
       this.authenticated = false;
       

@@ -12,6 +12,7 @@ interface RateLimitEntry {
 
 export class RateLimiter {
   private attempts: Map<string, RateLimitEntry> = new Map();
+  private cleanupTimerId: NodeJS.Timeout | null = null;
   
   // Configuration
   private readonly maxAttempts = 5;
@@ -21,7 +22,7 @@ export class RateLimiter {
   
   constructor() {
     // Periodically clean up old entries
-    setInterval(() => this.cleanup(), this.cleanupInterval);
+    this.cleanupTimerId = setInterval(() => this.cleanup(), this.cleanupInterval);
   }
   
   /**
@@ -150,6 +151,17 @@ export class RateLimiter {
    * Clear all rate limit data (for testing)
    */
   clear(): void {
+    this.attempts.clear();
+  }
+  
+  /**
+   * Destroy the rate limiter and clean up resources
+   */
+  destroy(): void {
+    if (this.cleanupTimerId) {
+      clearInterval(this.cleanupTimerId);
+      this.cleanupTimerId = null;
+    }
     this.attempts.clear();
   }
 }

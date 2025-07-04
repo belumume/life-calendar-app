@@ -9,6 +9,7 @@ class BrowserEncryptionService {
   private key: CryptoKey | null = null;
   private salt: Uint8Array | null = null;
   private static readonly SALT_SIZE = 32; // Standardize on 32 bytes
+  private static readonly PBKDF2_ITERATIONS = 210000; // OWASP 2023 recommendation
 
   async initialize(passphrase: string, existingSalt?: string): Promise<string> {
     // Use existing salt or generate new one
@@ -40,7 +41,7 @@ class BrowserEncryptionService {
       {
         name: 'PBKDF2',
         salt: this.salt,
-        iterations: 100000,
+        iterations: BrowserEncryptionService.PBKDF2_ITERATIONS,
         hash: 'SHA-256'
       },
       keyMaterial,

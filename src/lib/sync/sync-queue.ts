@@ -22,21 +22,29 @@ class SyncQueueService {
   private isSyncing = false;
   private maxRetries = 3;
   private syncListeners: Set<(queue: SyncOperation[]) => void> = new Set();
+  private boundHandleOnline: (() => void) | null = null;
+  private boundHandleOffline: (() => void) | null = null;
   
   constructor() {
     // Only add event listeners on client side
     if (typeof window !== 'undefined' && !process.env.VITEST) {
       this.isOnline = navigator.onLine;
+      // Create bound handlers to ensure we can remove them later
+      this.boundHandleOnline = this.handleOnline.bind(this);
+      this.boundHandleOffline = this.handleOffline.bind(this);
       // Listen for online/offline events
-      window.addEventListener('online', this.handleOnline.bind(this));
-      window.addEventListener('offline', this.handleOffline.bind(this));
+      window.addEventListener('online', this.boundHandleOnline);
+      window.addEventListener('offline', this.boundHandleOffline);
     }
   }
   
   private handleOnline() {
     this.isOnline = true;
     console.log('Network connection restored. Processing sync queue...');
-    this.processSyncQueue();
+    // Process sync queue in the background, handling any errors
+    this.processSyncQueue().catch(error => {
+      console.error('Error processing sync queue after coming online:', error);
+    });
   }
   
   private handleOffline() {
@@ -72,11 +80,18 @@ class SyncQueueService {
   }
   
   async processSyncQueue(): Promise<void> {
-    if (this.isSyncing || !this.isOnline || this.queue.length === 0) {
+    // Use atomic check-and-set to prevent race condition
+    if (this.isSyncing) {
       return;
     }
     
     this.isSyncing = true;
+    
+    // Re-check conditions after acquiring the lock
+    if (!this.isOnline || this.queue.length === 0) {
+      this.isSyncing = false;
+      return;
+    }
     
     try {
       const pendingOps = this.queue.filter(op => op.status === 'pending');
@@ -212,10 +227,17 @@ class SyncQueueService {
   
   destroy(): void {
     if (typeof window !== 'undefined') {
-      window.removeEventListener('online', this.handleOnline.bind(this));
-      window.removeEventListener('offline', this.handleOffline.bind(this));
+      if (this.boundHandleOnline) {
+        window.removeEventListener('online', this.boundHandleOnline);
+        this.boundHandleOnline = null;
+      }
+      if (this.boundHandleOffline) {
+        window.removeEventListener('offline', this.boundHandleOffline);
+        this.boundHandleOffline = null;
+      }
     }
     this.syncListeners.clear();
+    this.queue = [];
   }
 }
 

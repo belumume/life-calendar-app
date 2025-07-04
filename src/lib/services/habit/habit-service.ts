@@ -242,6 +242,10 @@ export class HabitService {
 
       // Add completion
       const dateOnly = completionDate.split('T')[0];
+      // Ensure completions array exists
+      if (!habitData.completions) {
+        habitData.completions = [];
+      }
       const alreadyCompleted = habitData.completions.some((c: any) => c.date.split('T')[0] === dateOnly);
       if (!alreadyCompleted) {
         habitData.completions.push({ date: completionDate, notes });
