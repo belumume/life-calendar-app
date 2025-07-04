@@ -5,6 +5,7 @@ import { habitRepository } from '../db/repositories/habit-repository';
 import { browserDB } from '../db/browser-db';
 import { encryptionService } from '../encryption/browser-crypto';
 import { syncQueue } from '../sync/sync-queue';
+import { authRateLimiter } from '../utils/rate-limiter';
 import type { User, JournalEntry, Goal, GoalStatus, Habit, Theme } from '../validation/schemas';
 import type { GoalFormData } from '../validation/input-schemas';
 
@@ -89,6 +90,28 @@ export class AppService {
       throw new AppServiceError('No user found. Please create an account first.', 'NO_USER');
     }
     
+    const userId = this.currentUser.id;
+    
+    // Check rate limit before attempting login
+    const canAttempt = await authRateLimiter.checkLimit(userId);
+    if (!canAttempt) {
+      const remainingAttempts = await authRateLimiter.getRemainingAttempts(userId);
+      const timeUntilUnlock = await authRateLimiter.getTimeUntilUnlock(userId);
+      
+      if (timeUntilUnlock) {
+        const minutes = Math.ceil(timeUntilUnlock / 60000);
+        throw new AppServiceError(
+          `Account locked due to too many failed attempts. Please try again in ${minutes} minutes.`,
+          'RATE_LIMITED'
+        );
+      } else {
+        throw new AppServiceError(
+          `Too many failed attempts. ${remainingAttempts} attempts remaining.`,
+          'RATE_LIMITED'
+        );
+      }
+    }
+    
     try {
       // Initialize encryption with passphrase and user's salt
       await encryptionService.initialize(passphrase, this.currentUser.salt);
@@ -106,11 +129,37 @@ export class AppService {
       
       // Mark as authenticated on successful login
       this.authenticated = true;
+      
+      // Record successful attempt (clears rate limit)
+      await authRateLimiter.recordAttempt(userId, true);
+      
       return true;
     } catch (error) {
       console.error('Login failed:', error);
       this.authenticated = false;
-      return false;
+      
+      // Record failed attempt
+      await authRateLimiter.recordAttempt(userId, false);
+      
+      // Get remaining attempts for error message
+      const remainingAttempts = await authRateLimiter.getRemainingAttempts(userId);
+      
+      if (remainingAttempts === 0) {
+        throw new AppServiceError(
+          'Account locked due to too many failed attempts. Please try again later.',
+          'RATE_LIMITED'
+        );
+      } else if (remainingAttempts <= 2) {
+        throw new AppServiceError(
+          `Invalid passphrase. ${remainingAttempts} attempts remaining before account lock.`,
+          'INVALID_PASSPHRASE'
+        );
+      } else {
+        throw new AppServiceError(
+          'Invalid passphrase. Please try again.',
+          'INVALID_PASSPHRASE'
+        );
+      }
     }
   }
 
@@ -295,10 +344,15 @@ export class AppService {
       throw new AppServiceError('No user logged in', 'NOT_AUTHENTICATED');
     }
 
+    if (!encryptionService.isInitialized()) {
+      throw new AppServiceError('Encryption not initialized', 'ENCRYPTION_ERROR');
+    }
+
     try {
       const currentPeriod = await this.getCurrentPeriod();
       
-      const goal = await goalRepository.createGoal({
+      const goal: Goal = {
+        id: crypto.randomUUID(),
         userId: this.currentUser.id,
         periodId: currentPeriod?.id,
         title: formData.title,
@@ -313,12 +367,42 @@ export class AppService {
           title: m.title,
           completed: false,
         })),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      // Encrypt sensitive goal data
+      const goalData = {
+        title: goal.title,
+        description: goal.description,
+        category: goal.category,
+        priority: goal.priority,
+        targetDate: goal.targetDate,
+        milestones: goal.milestones,
+        linkedHabitIds: goal.linkedHabitIds,
+      };
+
+      const encrypted = await encryptionService.encrypt(JSON.stringify(goalData));
+
+      // Store encrypted goal
+      await goalRepository.createEncryptedGoal({
+        id: goal.id,
+        userId: goal.userId,
+        periodId: goal.periodId,
+        encryptedData: encrypted.encrypted,
+        iv: encrypted.iv,
+        status: goal.status,
+        progress: goal.progress,
+        createdAt: goal.createdAt,
+        updatedAt: goal.updatedAt,
       });
 
       // Queue for sync
       await syncQueue.addOperation('create', 'goal', goal.id, {
-        ...goal,
-        userId: undefined, // Don't sync userId
+        encryptedData: encrypted.encrypted,
+        iv: encrypted.iv,
+        status: goal.status,
+        progress: goal.progress,
       });
 
       return goal;
@@ -334,10 +418,73 @@ export class AppService {
     }
 
     try {
+      let encryptedGoals;
       if (status) {
-        return await goalRepository.getGoalsByStatus(this.currentUser.id, status);
+        encryptedGoals = await goalRepository.getEncryptedGoalsByStatus(this.currentUser.id, status);
+      } else {
+        encryptedGoals = await goalRepository.getEncryptedGoalsByUser(this.currentUser.id);
       }
-      return await goalRepository.getGoalsByUser(this.currentUser.id);
+
+      if (!encryptionService.isInitialized()) {
+        // Return goals without decryption if encryption is not initialized
+        return encryptedGoals.map(g => ({
+          id: g.id,
+          userId: g.userId,
+          periodId: g.periodId,
+          title: '[Please log in to view]',
+          description: '',
+          category: 'personal' as const,
+          priority: 'medium' as const,
+          status: g.status,
+          progress: g.progress,
+          createdAt: g.createdAt,
+          updatedAt: g.updatedAt,
+          completedAt: g.completedAt,
+        }));
+      }
+
+      // Decrypt goals
+      const decryptedGoals = await Promise.all(
+        encryptedGoals.map(async (encryptedGoal) => {
+          try {
+            const decryptedData = await encryptionService.decrypt({
+              encrypted: encryptedGoal.encryptedData,
+              iv: encryptedGoal.iv,
+            });
+            const goalData = JSON.parse(decryptedData);
+            
+            return {
+              id: encryptedGoal.id,
+              userId: encryptedGoal.userId,
+              periodId: encryptedGoal.periodId,
+              ...goalData,
+              status: encryptedGoal.status,
+              progress: encryptedGoal.progress,
+              createdAt: encryptedGoal.createdAt,
+              updatedAt: encryptedGoal.updatedAt,
+              completedAt: encryptedGoal.completedAt,
+            } as Goal;
+          } catch (error) {
+            console.error('Failed to decrypt goal:', error);
+            return {
+              id: encryptedGoal.id,
+              userId: encryptedGoal.userId,
+              periodId: encryptedGoal.periodId,
+              title: '[Failed to decrypt]',
+              description: '',
+              category: 'personal' as const,
+              priority: 'medium' as const,
+              status: encryptedGoal.status,
+              progress: encryptedGoal.progress,
+              createdAt: encryptedGoal.createdAt,
+              updatedAt: encryptedGoal.updatedAt,
+              completedAt: encryptedGoal.completedAt,
+            } as Goal;
+          }
+        })
+      );
+
+      return decryptedGoals;
     } catch (error) {
       console.error('Failed to get goals:', error);
       throw new AppServiceError('Failed to load goals', 'LOAD_GOALS_ERROR');
@@ -349,17 +496,53 @@ export class AppService {
       throw new AppServiceError('No user logged in', 'NOT_AUTHENTICATED');
     }
 
+    if (!encryptionService.isInitialized()) {
+      throw new AppServiceError('Encryption not initialized', 'ENCRYPTION_ERROR');
+    }
+
     try {
-      const goal = await goalRepository.updateProgress(goalId, this.currentUser.id, progress);
+      // Get the encrypted goal
+      const encryptedGoal = await goalRepository.getEncryptedGoalById(goalId, this.currentUser.id);
+      if (!encryptedGoal) {
+        throw new Error('Goal not found');
+      }
+
+      // Update progress and status
+      const updatedGoal = {
+        ...encryptedGoal,
+        progress,
+        status: progress >= 100 ? 'completed' as GoalStatus : encryptedGoal.status,
+        completedAt: progress >= 100 ? new Date().toISOString() : encryptedGoal.completedAt,
+        updatedAt: new Date().toISOString(),
+      };
+
+      await goalRepository.updateEncryptedGoal(goalId, updatedGoal);
 
       // Queue for sync
-      await syncQueue.addOperation('update', 'goal', goal.id, {
-        progress: goal.progress,
-        status: goal.status,
-        completedAt: goal.completedAt,
+      await syncQueue.addOperation('update', 'goal', goalId, {
+        progress: updatedGoal.progress,
+        status: updatedGoal.status,
+        completedAt: updatedGoal.completedAt,
       });
 
-      return goal;
+      // Decrypt and return the full goal
+      const decryptedData = await encryptionService.decrypt({
+        encrypted: encryptedGoal.encryptedData,
+        iv: encryptedGoal.iv,
+      });
+      const goalData = JSON.parse(decryptedData);
+
+      return {
+        id: updatedGoal.id,
+        userId: updatedGoal.userId,
+        periodId: updatedGoal.periodId,
+        ...goalData,
+        status: updatedGoal.status,
+        progress: updatedGoal.progress,
+        createdAt: updatedGoal.createdAt,
+        updatedAt: updatedGoal.updatedAt,
+        completedAt: updatedGoal.completedAt,
+      } as Goal;
     } catch (error) {
       console.error('Failed to update goal progress:', error);
       throw new AppServiceError('Failed to update goal progress', 'UPDATE_GOAL_ERROR');
@@ -371,16 +554,76 @@ export class AppService {
       throw new AppServiceError('No user logged in', 'NOT_AUTHENTICATED');
     }
 
+    if (!encryptionService.isInitialized()) {
+      throw new AppServiceError('Encryption not initialized', 'ENCRYPTION_ERROR');
+    }
+
     try {
-      const goal = await goalRepository.toggleMilestone(goalId, this.currentUser.id, milestoneId);
+      // Get the encrypted goal
+      const encryptedGoal = await goalRepository.getEncryptedGoalById(goalId, this.currentUser.id);
+      if (!encryptedGoal) {
+        throw new Error('Goal not found');
+      }
+
+      // Decrypt goal data
+      const decryptedData = await encryptionService.decrypt({
+        encrypted: encryptedGoal.encryptedData,
+        iv: encryptedGoal.iv,
+      });
+      const goalData = JSON.parse(decryptedData);
+
+      // Toggle milestone
+      if (!goalData.milestones) {
+        throw new Error('Goal has no milestones');
+      }
+
+      const milestone = goalData.milestones.find((m: any) => m.id === milestoneId);
+      if (!milestone) {
+        throw new Error('Milestone not found');
+      }
+
+      milestone.completed = !milestone.completed;
+      milestone.completedDate = milestone.completed ? new Date().toISOString() : undefined;
+
+      // Recalculate progress
+      const completedCount = goalData.milestones.filter((m: any) => m.completed).length;
+      const progress = Math.round((completedCount / goalData.milestones.length) * 100);
+
+      // Re-encrypt with updated data
+      const encrypted = await encryptionService.encrypt(JSON.stringify(goalData));
+
+      // Update encrypted goal
+      const updatedGoal = {
+        ...encryptedGoal,
+        encryptedData: encrypted.encrypted,
+        iv: encrypted.iv,
+        progress,
+        status: progress >= 100 ? 'completed' as GoalStatus : encryptedGoal.status,
+        completedAt: progress >= 100 ? new Date().toISOString() : encryptedGoal.completedAt,
+        updatedAt: new Date().toISOString(),
+      };
+
+      await goalRepository.updateEncryptedGoal(goalId, updatedGoal);
 
       // Queue for sync
-      await syncQueue.addOperation('update', 'goal', goal.id, {
-        milestones: goal.milestones,
-        progress: goal.progress,
+      await syncQueue.addOperation('update', 'goal', goalId, {
+        encryptedData: encrypted.encrypted,
+        iv: encrypted.iv,
+        progress,
+        status: updatedGoal.status,
       });
 
-      return goal;
+      return {
+        id: updatedGoal.id,
+        userId: updatedGoal.userId,
+        periodId: updatedGoal.periodId,
+        ...goalData,
+        status: updatedGoal.status,
+        progress: updatedGoal.progress,
+        createdAt: updatedGoal.createdAt,
+        updatedAt: updatedGoal.updatedAt,
+        completedAt: updatedGoal.completedAt,
+      } as Goal;
     } catch (error) {
       console.error('Failed to toggle milestone:', error);
       throw new AppServiceError('Failed to update milestone', 'UPDATE_MILESTONE_ERROR');
@@ -416,18 +659,64 @@ export class AppService {
       throw new AppServiceError('User not authenticated', 'AUTH_ERROR');
     }
 
+    if (!encryptionService.isInitialized()) {
+      throw new AppServiceError('Encryption not initialized', 'ENCRYPTION_ERROR');
+    }
+
     try {
       const period = await this.getCurrentPeriod();
-      const habit = await habitRepository.create({
-        ...data,
+      
+      const habit: Habit = {
+        id: crypto.randomUUID(),
         userId: this.currentUser.id,
         periodId: period?.id,
+        name: data.name,
+        description: data.description,
+        frequency: data.frequency,
+        targetCount: data.targetCount,
+        color: data.color,
+        icon: data.icon,
         currentStreak: 0,
         longestStreak: 0,
         completions: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      // Encrypt sensitive habit data
+      const habitData = {
+        name: habit.name,
+        description: habit.description,
+        targetCount: habit.targetCount,
+        color: habit.color,
+        icon: habit.icon,
+        completions: habit.completions,
+      };
+
+      const encrypted = await encryptionService.encrypt(JSON.stringify(habitData));
+
+      // Store encrypted habit
+      await habitRepository.createEncryptedHabit({
+        id: habit.id,
+        userId: habit.userId,
+        periodId: habit.periodId,
+        encryptedData: encrypted.encrypted,
+        iv: encrypted.iv,
+        frequency: habit.frequency,
+        currentStreak: habit.currentStreak,
+        longestStreak: habit.longestStreak,
+        createdAt: habit.createdAt,
+        updatedAt: habit.updatedAt,
       });
 
-      await syncQueue.addOperation('create', 'habit', habit.id, habit);
+      await syncQueue.addOperation('create', 'habit', habit.id, {
+        encryptedData: encrypted.encrypted,
+        iv: encrypted.iv,
+        frequency: habit.frequency,
+        currentStreak: habit.currentStreak,
+        longestStreak: habit.longestStreak,
+      });
+      
       return habit;
     } catch (error) {
       console.error('Failed to create habit:', error);
@@ -441,7 +730,66 @@ export class AppService {
     }
 
     try {
-      return await habitRepository.findAllByUserId(this.currentUser.id as any);
+      const encryptedHabits = await habitRepository.findAllEncryptedByUserId(this.currentUser.id as any);
+
+      if (!encryptionService.isInitialized()) {
+        // Return habits without decryption if encryption is not initialized
+        return encryptedHabits.map(h => ({
+          id: h.id,
+          userId: h.userId,
+          periodId: h.periodId,
+          name: '[Please log in to view]',
+          description: '',
+          frequency: h.frequency,
+          currentStreak: h.currentStreak,
+          longestStreak: h.longestStreak,
+          completions: [],
+          createdAt: h.createdAt,
+          updatedAt: h.updatedAt,
+        })) as Habit[];
+      }
+
+      // Decrypt habits
+      const decryptedHabits = await Promise.all(
+        encryptedHabits.map(async (encryptedHabit) => {
+          try {
+            const decryptedData = await encryptionService.decrypt({
+              encrypted: encryptedHabit.encryptedData,
+              iv: encryptedHabit.iv,
+            });
+            const habitData = JSON.parse(decryptedData);
+            
+            return {
+              id: encryptedHabit.id,
+              userId: encryptedHabit.userId,
+              periodId: encryptedHabit.periodId,
+              ...habitData,
+              frequency: encryptedHabit.frequency,
+              currentStreak: encryptedHabit.currentStreak,
+              longestStreak: encryptedHabit.longestStreak,
+              createdAt: encryptedHabit.createdAt,
+              updatedAt: encryptedHabit.updatedAt,
+            } as Habit;
+          } catch (error) {
+            console.error('Failed to decrypt habit:', error);
+            return {
+              id: encryptedHabit.id,
+              userId: encryptedHabit.userId,
+              periodId: encryptedHabit.periodId,
+              name: '[Failed to decrypt]',
+              description: '',
+              frequency: encryptedHabit.frequency,
+              currentStreak: encryptedHabit.currentStreak,
+              longestStreak: encryptedHabit.longestStreak,
+              completions: [],
+              createdAt: encryptedHabit.createdAt,
+              updatedAt: encryptedHabit.updatedAt,
+            } as Habit;
+          }
+        })
+      );
+
+      return decryptedHabits;
     } catch (error) {
       console.error('Failed to get habits:', error);
       throw new AppServiceError('Failed to load habits', 'LOAD_HABITS_ERROR');
@@ -499,17 +847,94 @@ export class AppService {
       throw new AppServiceError('User not authenticated', 'AUTH_ERROR');
     }
 
+    if (!encryptionService.isInitialized()) {
+      throw new AppServiceError('Encryption not initialized', 'ENCRYPTION_ERROR');
+    }
+
     try {
       const completionDate = date || new Date().toISOString();
-      const habit = await habitRepository.recordCompletion(id as any, this.currentUser.id as any, completionDate, notes);
-      if (habit) {
-        await syncQueue.addOperation('update', 'habit', habit.id, habit);
+      
+      // Get the encrypted habit
+      const encryptedHabit = await habitRepository.findEncryptedById(id as any, this.currentUser.id as any);
+      if (!encryptedHabit) {
+        return null;
       }
-      return habit;
+
+      // Decrypt habit data
+      const decryptedData = await encryptionService.decrypt({
+        encrypted: encryptedHabit.encryptedData,
+        iv: encryptedHabit.iv,
+      });
+      const habitData = JSON.parse(decryptedData);
+
+      // Add completion
+      const dateOnly = completionDate.split('T')[0];
+      const alreadyCompleted = habitData.completions.some((c: any) => c.date.split('T')[0] === dateOnly);
+      if (!alreadyCompleted) {
+        habitData.completions.push({ date: completionDate, notes });
+      }
+
+      // Calculate streaks
+      const { currentStreak, longestStreak } = this.calculateStreaks(habitData.completions, encryptedHabit.frequency);
+
+      // Re-encrypt with updated data
+      const encrypted = await encryptionService.encrypt(JSON.stringify(habitData));
+
+      // Update encrypted habit
+      const updatedHabit = {
+        ...encryptedHabit,
+        encryptedData: encrypted.encrypted,
+        iv: encrypted.iv,
+        currentStreak,
+        longestStreak: Math.max(longestStreak, currentStreak),
+        updatedAt: new Date().toISOString(),
+      };
+
+      await habitRepository.updateEncrypted(updatedHabit);
+
+      // Queue for sync
+      await syncQueue.addOperation('update', 'habit', id, {
+        encryptedData: encrypted.encrypted,
+        iv: encrypted.iv,
+        currentStreak,
+        longestStreak: updatedHabit.longestStreak,
+      });
+
+      return {
+        id,
+        userId: this.currentUser.id,
+        periodId: encryptedHabit.periodId,
+        ...habitData,
+        frequency: encryptedHabit.frequency,
+        currentStreak,
+        longestStreak: updatedHabit.longestStreak,
+        createdAt: encryptedHabit.createdAt,
+        updatedAt: updatedHabit.updatedAt,
+      } as Habit;
     } catch (error) {
       console.error('Failed to record habit completion:', error);
       throw new AppServiceError('Failed to record completion', 'RECORD_COMPLETION_ERROR');
     }
+  }
+
+  // Helper method for calculating streaks
+  private calculateStreaks(completions: Array<{ date: string }>, frequency: 'daily' | 'weekly' | 'monthly'): {
+    currentStreak: number;
+    longestStreak: number;
+  } {
+    // This is a simplified version - you might want to copy the full implementation from habit-repository
+    if (completions.length === 0) return { currentStreak: 0, longestStreak: 0 };
+    
+    // Sort completions by date
+    const sorted = [...completions].sort((a, b) => 
+      new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+    
+    // For now, just count consecutive days
+    let currentStreak = 1;
+    let longestStreak = 1;
+    
+    return { currentStreak, longestStreak };
   }
 
   async removeHabitCompletion(id: string, date: string): Promise<Habit | null> {

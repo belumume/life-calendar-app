@@ -3,7 +3,26 @@ import type { Goal, GoalStatus } from '../../validation/schemas';
 import { GoalSchema } from '../../validation/schemas';
 import { GoalFormData } from '../../validation/input-schemas';
 
+// Encrypted goal type for storage
+export interface EncryptedGoal {
+  id: string;
+  userId: string;
+  periodId?: string;
+  encryptedData: string;
+  iv: string;
+  status: GoalStatus;
+  progress: number;
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
+}
+
 export class GoalRepository {
+  // Store encrypted goal data
+  async createEncryptedGoal(data: EncryptedGoal): Promise<void> {
+    await browserDB.saveGoal(data as any);
+  }
+
   async createGoal(data: Omit<Goal, 'id' | 'createdAt' | 'updatedAt'>): Promise<Goal> {
     const goal: Goal = {
       ...data,
@@ -19,6 +38,23 @@ export class GoalRepository {
     return validated;
   }
 
+  // Get encrypted goals - returns raw encrypted data
+  async getEncryptedGoalsByUser(userId: string): Promise<EncryptedGoal[]> {
+    const goals = await browserDB.getGoals(userId);
+    return goals as any as EncryptedGoal[];
+  }
+
+  async getEncryptedGoalsByStatus(userId: string, status: GoalStatus): Promise<EncryptedGoal[]> {
+    const goals = await browserDB.getGoalsByStatus(userId, status);
+    return goals as any as EncryptedGoal[];
+  }
+
+  async getEncryptedGoalsByPeriod(periodId: string): Promise<EncryptedGoal[]> {
+    const goals = await browserDB.getGoalsByPeriod(periodId);
+    return goals as any as EncryptedGoal[];
+  }
+
+  // Legacy methods for backward compatibility
   async getGoalsByUser(userId: string): Promise<Goal[]> {
     const goals = await browserDB.getGoals(userId);
     return goals.map(g => GoalSchema.parse(g));
@@ -34,6 +70,18 @@ export class GoalRepository {
     return goals.map(g => GoalSchema.parse(g));
   }
 
+  // Update encrypted goal
+  async updateEncryptedGoal(id: string, data: EncryptedGoal): Promise<void> {
+    await browserDB.saveGoal(data as any);
+  }
+
+  // Get single encrypted goal
+  async getEncryptedGoalById(id: string, userId: string): Promise<EncryptedGoal | null> {
+    const goals = await this.getEncryptedGoalsByUser(userId);
+    return goals.find(g => g.id === id) || null;
+  }
+
+  // Legacy update method
   async updateGoal(id: string, updates: Partial<Goal>): Promise<Goal> {
     const goals = await browserDB.getGoals(updates.userId || '');
     const existing = goals.find(g => g.id === id);

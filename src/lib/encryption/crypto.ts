@@ -3,6 +3,8 @@
  * Provides secure encryption/decryption for user data
  */
 
+import { uint8ArrayToBase64, base64ToUint8Array } from './base64-utils';
+
 // Constants for encryption
 const PBKDF2_ITERATIONS = 100000;
 const SALT_LENGTH = 32;
@@ -183,20 +185,14 @@ export class CryptoService {
    */
   private arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array): string {
     const bytes = buffer instanceof ArrayBuffer ? new Uint8Array(buffer) : buffer;
-    const binary = String.fromCharCode(...bytes);
-    return btoa(binary);
+    return uint8ArrayToBase64(bytes);
   }
 
   /**
    * Convert base64 to ArrayBuffer
    */
   private base64ToArrayBuffer(base64: string): ArrayBuffer {
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-    return bytes.buffer;
+    return base64ToUint8Array(base64).buffer;
   }
 
   /**
@@ -219,8 +215,7 @@ export class CryptoService {
   static async exportKey(key: CryptoKey): Promise<string> {
     const exported = await crypto.subtle.exportKey('raw', key);
     const bytes = new Uint8Array(exported);
-    const binary = String.fromCharCode(...bytes);
-    return btoa(binary);
+    return uint8ArrayToBase64(bytes);
   }
 
   /**

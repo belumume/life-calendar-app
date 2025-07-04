@@ -1,0 +1,7 @@
+PNG placeholder - Replace with actual 180x180 apple touch icon
+
+To generate proper icons:
+1. Use an online SVG to PNG converter
+2. Upload /public/icons/icon.svg
+3. Generate 180x180 PNG
+4. Replace this file

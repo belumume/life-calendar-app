@@ -46,8 +46,14 @@ export class ExportService {
           ...entry,
           iv: undefined // Don't export encryption artifacts
         })),
-        goals,
-        habits
+        goals: goals.map(goal => ({
+          ...goal,
+          iv: undefined // Remove any encryption artifacts
+        })),
+        habits: habits.map(habit => ({
+          ...habit,
+          iv: undefined // Remove any encryption artifacts
+        }))
       };
 
       return JSON.stringify(exportData, null, 2);
