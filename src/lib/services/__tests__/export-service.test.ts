@@ -9,6 +9,8 @@ vi.mock('../app-service', () => ({
     getCurrentUser: vi.fn(),
     getJournalEntries: vi.fn(),
     getCurrentPeriod: vi.fn(),
+    getGoals: vi.fn(),
+    getHabits: vi.fn(),
   }
 }));
 
@@ -73,6 +75,8 @@ describe('ExportService', () => {
       vi.mocked(appService.getCurrentUser).mockReturnValue(mockUser);
       vi.mocked(appService.getJournalEntries).mockResolvedValue(mockEntries);
       vi.mocked(appService.getCurrentPeriod).mockResolvedValue(mockPeriod);
+      vi.mocked(appService.getGoals).mockResolvedValue([]);
+      vi.mocked(appService.getHabits).mockResolvedValue([]);
 
       const jsonExport = await exportService.exportToJSON();
       const exportData = JSON.parse(jsonExport);
@@ -108,6 +112,8 @@ describe('ExportService', () => {
       vi.mocked(appService.getCurrentUser).mockReturnValue(mockUser);
       vi.mocked(appService.getJournalEntries).mockResolvedValue(mockEntries);
       vi.mocked(appService.getCurrentPeriod).mockResolvedValue(mockPeriod);
+      vi.mocked(appService.getGoals).mockResolvedValue([]);
+      vi.mocked(appService.getHabits).mockResolvedValue([]);
 
       const markdown = await exportService.exportToMarkdown();
 
@@ -139,6 +145,8 @@ describe('ExportService', () => {
       vi.mocked(appService.getCurrentUser).mockReturnValue(mockUser);
       vi.mocked(appService.getJournalEntries).mockResolvedValue([minimalEntry]);
       vi.mocked(appService.getCurrentPeriod).mockResolvedValue(mockPeriod);
+      vi.mocked(appService.getGoals).mockResolvedValue([]);
+      vi.mocked(appService.getHabits).mockResolvedValue([]);
 
       const markdown = await exportService.exportToMarkdown();
 
@@ -198,6 +206,8 @@ describe('ExportService', () => {
       vi.mocked(appService.getCurrentUser).mockReturnValue(mockUser);
       vi.mocked(appService.getJournalEntries).mockResolvedValue(mockEntries); // Already decrypted
       vi.mocked(appService.getCurrentPeriod).mockResolvedValue(mockPeriod);
+      vi.mocked(appService.getGoals).mockResolvedValue([]);
+      vi.mocked(appService.getHabits).mockResolvedValue([]);
 
       const jsonExport = await exportService.exportToJSON();
       const exportData = JSON.parse(jsonExport);
