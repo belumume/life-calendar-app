@@ -1,3 +1,5 @@
+import { uint8ArrayToBase64, base64ToUint8Array, generateSalt, isValidBase64 } from './base64-utils';
+
 export interface EncryptedData {
   encrypted: string;
   iv: string;
@@ -6,23 +8,22 @@ export interface EncryptedData {
 class BrowserEncryptionService {
   private key: CryptoKey | null = null;
   private salt: Uint8Array | null = null;
+  private static readonly SALT_SIZE = 32; // Standardize on 32 bytes
 
   async initialize(passphrase: string, existingSalt?: string): Promise<string> {
     // Use existing salt or generate new one
     if (existingSalt) {
-      // Handle base64 salt more safely
-      try {
-        const binaryString = atob(existingSalt);
-        this.salt = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          this.salt[i] = binaryString.charCodeAt(i);
-        }
-      } catch (e) {
-        // If not valid base64, treat as raw string
+      // Safely decode base64 salt
+      if (isValidBase64(existingSalt)) {
+        this.salt = base64ToUint8Array(existingSalt);
+      } else {
+        // Legacy support: if not valid base64, might be from old encoding
+        // Try to handle it gracefully
+        console.warn('Invalid base64 salt detected, attempting recovery');
         this.salt = new TextEncoder().encode(existingSalt);
       }
     } else {
-      this.salt = crypto.getRandomValues(new Uint8Array(16));
+      this.salt = generateSalt(BrowserEncryptionService.SALT_SIZE);
     }
     
     // Derive key from passphrase
@@ -48,10 +49,8 @@ class BrowserEncryptionService {
       ['encrypt', 'decrypt']
     );
     
-    // Return salt as base64 for storage
-    // Convert to array for safer base64 encoding
-    const saltArray = Array.from(this.salt);
-    return btoa(saltArray.map(b => String.fromCharCode(b)).join(''));
+    // Return salt as base64 for storage using safe encoding
+    return uint8ArrayToBase64(this.salt);
   }
 
   async encrypt(data: string): Promise<EncryptedData> {
@@ -72,13 +71,10 @@ class BrowserEncryptionService {
       encoder.encode(data)
     );
 
-    // Convert to array for safer base64 encoding
-    const encryptedArray = Array.from(new Uint8Array(encrypted));
-    const ivArray = Array.from(iv);
-    
+    // Use safe base64 encoding
     return {
-      encrypted: btoa(encryptedArray.map(b => String.fromCharCode(b)).join('')),
-      iv: btoa(ivArray.map(b => String.fromCharCode(b)).join(''))
+      encrypted: uint8ArrayToBase64(new Uint8Array(encrypted)),
+      iv: uint8ArrayToBase64(iv)
     };
   }
 
@@ -89,18 +85,9 @@ class BrowserEncryptionService {
 
     const decoder = new TextDecoder();
     
-    // Safer base64 decoding
-    const encryptedBinary = atob(data.encrypted);
-    const encrypted = new Uint8Array(encryptedBinary.length);
-    for (let i = 0; i < encryptedBinary.length; i++) {
-      encrypted[i] = encryptedBinary.charCodeAt(i);
-    }
-    
-    const ivBinary = atob(data.iv);
-    const iv = new Uint8Array(ivBinary.length);
-    for (let i = 0; i < ivBinary.length; i++) {
-      iv[i] = ivBinary.charCodeAt(i);
-    }
+    // Use safe base64 decoding
+    const encrypted = base64ToUint8Array(data.encrypted);
+    const iv = base64ToUint8Array(data.iv);
 
     const decrypted = await crypto.subtle.decrypt(
       {

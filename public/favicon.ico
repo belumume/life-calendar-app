@@ -1,0 +1,7 @@
+ICO placeholder - Replace with actual favicon
+
+To generate proper favicon:
+1. Use an online favicon generator
+2. Upload /public/icons/icon.svg
+3. Generate multi-size ICO file
+4. Replace this file

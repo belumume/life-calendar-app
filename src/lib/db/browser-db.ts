@@ -138,9 +138,15 @@ class BrowserDatabase {
     return entries.map(e => ({
       id: e.id,
       userId: e.userId,
+      periodId: e.periodId,
       date: e.date,
       dayNumber: e.dayNumber,
       content: e.content,
+      iv: e.iv,
+      mood: e.mood,
+      tags: e.tags || [],
+      achievements: e.achievements || [],
+      gratitude: e.gratitude || [],
       createdAt: e.createdAt,
       updatedAt: e.updatedAt,
     } as JournalEntry));

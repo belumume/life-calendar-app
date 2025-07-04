@@ -2,7 +2,27 @@ import type { Habit, HabitId, UserId } from '../../validation/schemas';
 import { createHabitId } from '../../validation/schemas';
 import { browserDB } from '../browser-db';
 
+// Encrypted habit type for storage
+export interface EncryptedHabit {
+  id: string;
+  userId: string;
+  periodId?: string;
+  encryptedData: string;
+  iv: string;
+  frequency: 'daily' | 'weekly' | 'monthly';
+  currentStreak: number;
+  longestStreak: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export class HabitRepository {
+  // Create encrypted habit
+  async createEncryptedHabit(data: EncryptedHabit): Promise<void> {
+    await browserDB.addHabit(data as any);
+  }
+
+  // Legacy create method
   async create(habit: Omit<Habit, 'id' | 'createdAt' | 'updatedAt'>): Promise<Habit> {
     const now = new Date().toISOString();
     const newHabit: Habit = {
@@ -19,6 +39,23 @@ export class HabitRepository {
     return newHabit;
   }
 
+  // Get encrypted habit by ID
+  async findEncryptedById(id: HabitId, userId: UserId): Promise<EncryptedHabit | null> {
+    const habit = await browserDB.getHabitById(id as string, userId as string);
+    return habit as EncryptedHabit | null;
+  }
+
+  async findAllEncryptedByUserId(userId: UserId): Promise<EncryptedHabit[]> {
+    const habits = await browserDB.getHabitsByUserId(userId as string);
+    return habits as any as EncryptedHabit[];
+  }
+
+  async findEncryptedByPeriodId(periodId: string, userId: UserId): Promise<EncryptedHabit[]> {
+    const habits = await browserDB.getHabitsByPeriodId(periodId, userId as string);
+    return habits as any as EncryptedHabit[];
+  }
+
+  // Legacy methods
   async findById(id: HabitId, userId: UserId): Promise<Habit | null> {
     return browserDB.getHabitById(id as string, userId as string);
   }
@@ -31,6 +68,12 @@ export class HabitRepository {
     return browserDB.getHabitsByPeriodId(periodId, userId as string);
   }
 
+  // Update encrypted habit
+  async updateEncrypted(data: EncryptedHabit): Promise<void> {
+    await browserDB.updateHabit(data.id, data.userId, data as any);
+  }
+
+  // Legacy update method
   async update(id: HabitId, userId: UserId, updates: Partial<Omit<Habit, 'id' | 'userId' | 'createdAt'>>): Promise<Habit | null> {
     return browserDB.updateHabit(id as string, userId as string, updates);
   }
