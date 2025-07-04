@@ -7,6 +7,7 @@ import GoalForm from "../../components/GoalForm";
 import GoalCard from "../../components/GoalCard";
 import SyncStatus from "../../components/SyncStatus";
 import type { Goal, GoalStatus } from "../../lib/validation/schemas";
+import type { GoalFormData } from "../../lib/validation/input-schemas";
 
 type FilterType = 'all' | GoalStatus;
 
@@ -49,7 +50,7 @@ export default function GoalsPage() {
     }
   });
   
-  const handleCreateGoal = async (formData: any) => {
+  const handleCreateGoal = async (formData: GoalFormData) => {
     setIsSubmitting(true);
     setError(null);
     

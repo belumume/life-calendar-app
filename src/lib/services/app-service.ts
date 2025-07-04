@@ -201,7 +201,7 @@ export class AppService {
         dayNumber,
         content: encrypted.encrypted,
         iv: encrypted.iv,
-        mood: mood as any,
+        mood: mood,
         tags: tags || [],
         achievements: achievements || [],
         gratitude: gratitude || [],

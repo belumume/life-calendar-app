@@ -1,12 +1,22 @@
+export type SyncOperationType = 'create' | 'update' | 'delete';
+export type SyncEntityType = 'journal' | 'period' | 'user' | 'goal' | 'habit';
+export type SyncStatus = 'pending' | 'syncing' | 'failed' | 'completed';
+
+export interface SyncOperationData {
+  encryptedData?: string;
+  iv?: string;
+  [key: string]: unknown;
+}
+
 export interface SyncOperation {
   id: string;
-  type: 'create' | 'update' | 'delete';
-  entity: 'journal' | 'period' | 'user' | 'goal' | 'habit';
+  type: SyncOperationType;
+  entity: SyncEntityType;
   entityId: string;
-  data: any;
+  data: SyncOperationData;
   timestamp: string;
   retryCount: number;
-  status: 'pending' | 'syncing' | 'failed' | 'completed';
+  status: SyncStatus;
   error?: string;
 }
 
@@ -53,10 +63,10 @@ class SyncQueueService {
   }
   
   async addOperation(
-    type: SyncOperation['type'],
-    entity: SyncOperation['entity'],
+    type: SyncOperationType,
+    entity: SyncEntityType,
     entityId: string,
-    data: any
+    data: SyncOperationData
   ): Promise<void> {
     const operation: SyncOperation = {
       id: typeof crypto !== 'undefined' ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
