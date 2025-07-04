@@ -1,12 +1,12 @@
 import { appService } from './app-service';
 import { browserDB } from '../db/browser-db';
-import type { User, JournalEntry, Goal, Habit } from '../validation/schemas';
+import type { User, JournalEntry, Goal, Habit, Period } from '../validation/schemas';
 
 export interface ExportData {
   version: string;
   exportDate: string;
   user: User | null;
-  periods: any[];
+  periods: Period[];
   journalEntries: JournalEntry[];
   goals: Goal[];
   habits: Habit[];

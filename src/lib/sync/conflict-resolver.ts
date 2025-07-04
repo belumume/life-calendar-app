@@ -2,15 +2,17 @@ import { JournalEntry, Goal, Habit, User } from '../types';
 
 export type ConflictResolutionStrategy = 'local-first' | 'remote-first' | 'newest-wins' | 'merge';
 
+export interface ConflictDetail {
+  field: string;
+  localValue: unknown;
+  remoteValue: unknown;
+  resolution: 'local' | 'remote' | 'merged';
+}
+
 export interface ConflictResolution<T> {
   resolved: T;
   strategy: ConflictResolutionStrategy;
-  conflicts: Array<{
-    field: string;
-    localValue: any;
-    remoteValue: any;
-    resolution: 'local' | 'remote' | 'merged';
-  }>;
+  conflicts: ConflictDetail[];
 }
 
 export class ConflictResolver {

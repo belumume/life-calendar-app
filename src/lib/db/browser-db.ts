@@ -190,7 +190,7 @@ class BrowserDatabase {
     };
   }
 
-  async saveEntry(entry: any): Promise<void> {
+  async saveEntry(entry: Partial<JournalEntry>): Promise<void> {
     if (!this.db) await this.init();
     
     // Ensure entry has required fields for validation
@@ -207,13 +207,13 @@ class BrowserDatabase {
     await this.db!.put('entries', entryToValidate);
   }
 
-  async getActivePeriod(userId: string): Promise<any | null> {
+  async getActivePeriod(userId: string): Promise<Period | null> {
     if (!this.db) await this.init();
     const periods = await this.db!.getAllFromIndex('periods', 'by-user', userId);
     return periods.find(p => p.isActive) || null;
   }
 
-  async savePeriod(period: any): Promise<void> {
+  async savePeriod(period: Partial<Period>): Promise<void> {
     if (!this.db) await this.init();
     await this.db!.put('periods', {
       ...period,
@@ -234,7 +234,7 @@ class BrowserDatabase {
   }
 
   // Goal methods
-  async saveGoal(goal: any): Promise<void> {
+  async saveGoal(goal: Partial<Goal>): Promise<void> {
     if (!this.db) await this.init();
     await this.db!.put('goals', {
       ...goal,

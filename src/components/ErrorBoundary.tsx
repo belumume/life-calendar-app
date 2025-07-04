@@ -2,8 +2,10 @@ import { ErrorBoundary as SolidErrorBoundary, createSignal, Show } from "solid-j
 import { A } from "@solidjs/router";
 import { errorHandler } from "../lib/utils/error-handler";
 
+import { JSX } from "solid-js";
+
 interface Props {
-  children: any;
+  children: JSX.Element;
 }
 
 export default function ErrorBoundary(props: Props) {

@@ -1,10 +1,11 @@
 import { goalRepository } from '../../db/repositories/goal-repository';
 import { browserDB } from '../../db/browser-db';
-import { encryptionService } from '../../encryption/browser-crypto';
 import { syncQueue } from '../../sync/sync-queue';
 import { authService } from '../auth/auth-service';
+import { EncryptedService } from '../base/encrypted-service';
 import type { Goal, GoalStatus } from '../../validation/schemas';
 import type { GoalFormData } from '../../validation/input-schemas';
+import type { EncryptedGoal } from '../../db/repositories/goal-repository';
 
 export class GoalServiceError extends Error {
   constructor(message: string, public code?: string) {
@@ -13,7 +14,26 @@ export class GoalServiceError extends Error {
   }
 }
 
-export class GoalService {
+interface GoalData {
+  title: string;
+  description?: string;
+  category: string;
+  priority: 'low' | 'medium' | 'high';
+  status: GoalStatus;
+  targetDate?: string;
+  progress: number;
+  milestones?: Array<{
+    id: string;
+    title: string;
+    completed: boolean;
+    completedAt?: string;
+  }>;
+}
+
+export class GoalService extends EncryptedService<GoalData, EncryptedGoal> {
+  constructor() {
+    super('GoalService');
+  }
   /**
    * Create a new goal
    */
@@ -44,26 +64,31 @@ export class GoalService {
         updatedAt: new Date().toISOString(),
       };
 
-      // Encrypt sensitive goal data
-      const goalData = {
+      // Prepare goal data for encryption
+      const goalData: GoalData = {
         title: goal.title,
         description: goal.description,
         category: goal.category,
         priority: goal.priority,
+        status: goal.status,
         targetDate: goal.targetDate,
+        progress: goal.progress,
         milestones: goal.milestones,
-        linkedHabitIds: goal.linkedHabitIds,
       };
 
-      const encrypted = await encryptionService.encrypt(JSON.stringify(goalData));
+      // Use base class method for encryption
+      const encryptedEntity = await this.createEncryptedEntity(
+        goalData,
+        {
+          id: goal.id,
+          userId: goal.userId,
+          periodId: goal.periodId,
+        }
+      );
 
       // Store encrypted goal
       await goalRepository.createEncryptedGoal({
-        id: goal.id,
-        userId: goal.userId,
-        periodId: goal.periodId,
-        encryptedData: encrypted.encrypted,
-        iv: encrypted.iv,
+        ...encryptedEntity,
         status: goal.status,
         progress: goal.progress,
         createdAt: goal.createdAt,
@@ -72,8 +97,8 @@ export class GoalService {
 
       // Queue for sync
       await syncQueue.addOperation('create', 'goal', goal.id, {
-        encryptedData: encrypted.encrypted,
-        iv: encrypted.iv,
+        encryptedData: encryptedEntity.encryptedData,
+        iv: encryptedEntity.iv,
         status: goal.status,
         progress: goal.progress,
       });
@@ -100,66 +125,26 @@ export class GoalService {
         encryptedGoals = await goalRepository.getEncryptedGoalsByUser(userId);
       }
 
-      if (!encryptionService.isInitialized()) {
-        // Return goals without decryption if encryption is not initialized
-        return encryptedGoals.map(g => ({
-          id: g.id,
-          userId: g.userId,
-          periodId: g.periodId,
-          title: '[Please log in to view]',
-          description: '',
-          category: 'personal' as const,
-          priority: 'medium' as const,
-          status: g.status,
-          progress: g.progress,
-          createdAt: g.createdAt,
-          updatedAt: g.updatedAt,
-          completedAt: g.completedAt,
-        }));
-      }
+      this.requireEncryption();
 
-      // Decrypt goals
-      const decryptedGoals = await Promise.all(
-        encryptedGoals.map(async (encryptedGoal) => {
-          try {
-            const decryptedData = await encryptionService.decrypt({
-              encrypted: encryptedGoal.encryptedData,
-              iv: encryptedGoal.iv,
-            });
-            const goalData = JSON.parse(decryptedData);
-            
-            return {
-              id: encryptedGoal.id,
-              userId: encryptedGoal.userId,
-              periodId: encryptedGoal.periodId,
-              ...goalData,
-              status: encryptedGoal.status,
-              progress: encryptedGoal.progress,
-              createdAt: encryptedGoal.createdAt,
-              updatedAt: encryptedGoal.updatedAt,
-              completedAt: encryptedGoal.completedAt,
-            } as Goal;
-          } catch (error) {
-            console.error('Failed to decrypt goal:', error);
-            return {
-              id: encryptedGoal.id,
-              userId: encryptedGoal.userId,
-              periodId: encryptedGoal.periodId,
-              title: '[Failed to decrypt]',
-              description: '',
-              category: 'personal' as const,
-              priority: 'medium' as const,
-              status: encryptedGoal.status,
-              progress: encryptedGoal.progress,
-              createdAt: encryptedGoal.createdAt,
-              updatedAt: encryptedGoal.updatedAt,
-              completedAt: encryptedGoal.completedAt,
-            } as Goal;
-          }
-        })
-      );
-
-      return decryptedGoals;
+      // Use base class batch decrypt method
+      const decryptedGoals = await this.batchDecrypt(encryptedGoals);
+      
+      // Map to Goal format with additional metadata
+      const goalsMap = new Map(encryptedGoals.map(g => [g.id, g]));
+      
+      return decryptedGoals.map(decryptedData => {
+        const encryptedGoal = goalsMap.get(decryptedData.id)!;
+        return {
+          id: decryptedData.id,
+          userId: encryptedGoal.userId,
+          periodId: encryptedGoal.periodId,
+          ...decryptedData,
+          createdAt: encryptedGoal.createdAt,
+          updatedAt: encryptedGoal.updatedAt,
+          completedAt: encryptedGoal.completedAt,
+        } as Goal;
+      });
     } catch (error) {
       console.error('Failed to get goals:', error);
       throw new GoalServiceError('Failed to load goals', 'LOAD_GOALS_ERROR');
