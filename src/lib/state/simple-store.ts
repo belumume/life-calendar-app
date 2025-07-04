@@ -32,15 +32,12 @@ export function createAppStore() {
   return {
     state,
     setState,
-    // Simple initialization for now
+    // Initialize store without localStorage for security
     async initialize() {
       setState("isLoading", true);
       try {
-        // For now, just check localStorage
-        const userData = localStorage.getItem("user");
-        if (userData) {
-          setState("user", JSON.parse(userData));
-        }
+        // User data will be loaded from encrypted database
+        // through the AppContext after authentication
         setState("isInitialized", true);
       } catch (error) {
         console.error("Init error:", error);
