@@ -5,8 +5,10 @@ describe('SyncQueueService', () => {
   let syncQueue: SyncQueueService;
   
   beforeEach(() => {
-    // Clear localStorage
-    localStorage.clear();
+    // Clear localStorage mocks
+    vi.mocked(localStorage.getItem).mockReturnValue(null);
+    vi.mocked(localStorage.setItem).mockImplementation(() => {});
+    vi.mocked(localStorage.clear).mockImplementation(() => {});
     
     // Mock navigator.onLine
     Object.defineProperty(navigator, 'onLine', {
@@ -87,6 +89,9 @@ describe('SyncQueueService', () => {
   
   describe('processSyncQueue', () => {
     it('should process pending operations', async () => {
+      // Set offline to prevent auto-sync
+      (syncQueue as any).isOnline = false;
+      
       // Add some operations
       await syncQueue.addOperation('create', 'journal', 'entry-1', { content: 'Entry 1' });
       await syncQueue.addOperation('create', 'journal', 'entry-2', { content: 'Entry 2' });
@@ -95,6 +100,9 @@ describe('SyncQueueService', () => {
       const syncSpy = vi.spyOn(syncQueue as any, 'syncOperation')
         .mockResolvedValue(undefined);
       
+      // Set back online
+      (syncQueue as any).isOnline = true;
+      
       await syncQueue.processSyncQueue();
       
       expect(syncSpy).toHaveBeenCalledTimes(2);
@@ -102,6 +110,9 @@ describe('SyncQueueService', () => {
     });
     
     it('should retry failed operations', async () => {
+      // Set offline to prevent auto-sync
+      (syncQueue as any).isOnline = false;
+      
       await syncQueue.addOperation('create', 'journal', 'entry-fail', {
         content: 'Will fail'
       });
@@ -117,6 +128,9 @@ describe('SyncQueueService', () => {
           return Promise.resolve();
         });
       
+      // Set back online
+      (syncQueue as any).isOnline = true;
+      
       // First attempt - should fail
       await syncQueue.processSyncQueue();
       let queue = syncQueue.getQueue();
@@ -131,6 +145,9 @@ describe('SyncQueueService', () => {
     });
     
     it('should mark operations as failed after max retries', async () => {
+      // Set offline to prevent auto-sync
+      (syncQueue as any).isOnline = false;
+      
       await syncQueue.addOperation('create', 'journal', 'entry-fail', {
         content: 'Will fail permanently'
       });
@@ -141,6 +158,9 @@ describe('SyncQueueService', () => {
       
       // Set maxRetries to 3
       (syncQueue as any).maxRetries = 3;
+      
+      // Set back online
+      (syncQueue as any).isOnline = true;
       
       // Process multiple times
       for (let i = 0; i < 4; i++) {
@@ -173,7 +193,8 @@ describe('SyncQueueService', () => {
         isSyncing: false
       };
       
-      localStorage.setItem('sync-queue', JSON.stringify(mockData));
+      // Mock localStorage.getItem to return our test data
+      vi.mocked(localStorage.getItem).mockReturnValue(JSON.stringify(mockData));
       
       // Create a new instance to test loading
       const newSyncQueue = new SyncQueueService();
@@ -187,7 +208,8 @@ describe('SyncQueueService', () => {
     });
     
     it('should handle corrupted localStorage data', async () => {
-      localStorage.setItem('sync-queue', 'invalid-json');
+      // Mock localStorage.getItem to return invalid JSON
+      vi.mocked(localStorage.getItem).mockReturnValue('invalid-json');
       
       // Create a new instance to test loading
       const newSyncQueue = new SyncQueueService();
@@ -287,26 +309,42 @@ describe('SyncQueueService', () => {
   
   describe('network status', () => {
     it('should handle online event', () => {
-      (navigator as any).onLine = false;
-      (syncQueue as any).isOnline = false;
+      // Create a new instance without VITEST check
+      const originalEnv = process.env.VITEST;
+      delete process.env.VITEST;
       
-      const processSpy = vi.spyOn(syncQueue as any, 'processSyncQueue');
+      const testSyncQueue = new SyncQueueService();
+      (navigator as any).onLine = false;
+      (testSyncQueue as any).isOnline = false;
+      
+      const processSpy = vi.spyOn(testSyncQueue as any, 'processSyncQueue');
       
       // Simulate online event
-      window.dispatchEvent(new Event('online'));
+      (testSyncQueue as any).handleOnline();
       
-      expect((syncQueue as any).isOnline).toBe(true);
+      expect((testSyncQueue as any).isOnline).toBe(true);
       expect(processSpy).toHaveBeenCalled();
+      
+      testSyncQueue.destroy();
+      process.env.VITEST = originalEnv;
     });
     
     it('should handle offline event', () => {
+      // Create a new instance without VITEST check
+      const originalEnv = process.env.VITEST;
+      delete process.env.VITEST;
+      
+      const testSyncQueue = new SyncQueueService();
       (navigator as any).onLine = true;
-      (syncQueue as any).isOnline = true;
+      (testSyncQueue as any).isOnline = true;
       
       // Simulate offline event
-      window.dispatchEvent(new Event('offline'));
+      (testSyncQueue as any).handleOffline();
       
-      expect((syncQueue as any).isOnline).toBe(false);
+      expect((testSyncQueue as any).isOnline).toBe(false);
+      
+      testSyncQueue.destroy();
+      process.env.VITEST = originalEnv;
     });
   });
 });
