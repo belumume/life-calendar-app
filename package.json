@@ -22,13 +22,13 @@
     "@solidjs/router": "^0.15.3",
     "@solidjs/start": "^1.1.5",
     "idb": "^8.0.3",
-    "solid-js": "^1.9.3",
+    "solid-js": "^1.9.11",
     "vinxi": "^0.5.7",
     "workbox-window": "^7.3.0",
     "zod": "^3.25.71"
   },
   "devDependencies": {
-    "@playwright/test": "^1.48.2",
+    "@playwright/test": "^1.58.2",
     "@solidjs/testing-library": "^0.8.10",
     "@types/node": "^24.0.10",
     "@typescript-eslint/eslint-plugin": "^8.18.0",
@@ -40,7 +40,7 @@
     "jsdom": "^26.1.0",
     "prettier": "^3.4.2",
     "typescript": "^5.7.2",
-    "vite": "^6.0.3",
+    "vite": "^6.4.1",
     "vite-plugin-pwa": "^1.0.1",
     "vite-plugin-solid": "^2.11.0",
     "vitest": "^3.2.4"
